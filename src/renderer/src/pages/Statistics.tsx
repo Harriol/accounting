@@ -10,6 +10,8 @@ import {
   Alert,
   Segmented,
   Space,
+  Progress,
+  Tag,
 } from 'antd'
 import { Pie, Column } from '@ant-design/charts'
 import dayjs, { Dayjs } from 'dayjs'
@@ -26,11 +28,14 @@ function Statistics(): JSX.Element {
     // Income stats
     incomeMonthlySummary, incomeMonthlyTotals, incomeMonthlyCount,
     incomeStatsLoading, incomeStatsError,
+    // Daily totals
+    dailyTotals, dailyTotalsLoading,
     // Common
     customCategories, currentMode,
     // Actions
     fetchMonthlySummary, fetchMonthlyTotals, fetchMonthlyCount,
     fetchIncomeMonthlySummary, fetchIncomeMonthlyTotals, fetchIncomeMonthlyCount,
+    fetchDailyTotals,
     setMode,
   } = store
 
@@ -47,6 +52,7 @@ function Statistics(): JSX.Element {
       fetchIncomeMonthlySummary(year, month)
       fetchIncomeMonthlyCount(year, month)
     }
+    fetchDailyTotals(isExpense ? 'expense' : 'income', year, month)
   }, [selectedMonth, isExpense])
 
   useEffect(() => {
@@ -99,6 +105,7 @@ function Statistics(): JSX.Element {
     [monthTotal, selectedMonth]
   )
 
+  // ============ Pie Chart Data ============
   const pieData = useMemo(
     () => summary.map(item => ({
       type: item.category_l1,
@@ -108,6 +115,7 @@ function Statistics(): JSX.Element {
     [summary, iconMap]
   )
 
+  // ============ 12-Month Trend Data ============
   const barData = useMemo(
     () => [...totals].reverse().map(item => ({
       month: item.month,
@@ -116,73 +124,100 @@ function Statistics(): JSX.Element {
     [totals]
   )
 
+  // ============ Daily Comparison Data ============
+  const dailyData = useMemo(() => {
+    const year = selectedMonth.year()
+    const month = selectedMonth.month() + 1
+    const daysInMonth = selectedMonth.daysInMonth()
+
+    // Build a map of date -> total
+    const totalMap: Record<string, number> = {}
+    for (const d of dailyTotals) {
+      totalMap[d.date] = d.total
+    }
+
+    // Pad all days of the month
+    const result: { day: string; amount: number }[] = []
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      result.push({
+        day: `${d}日`,
+        amount: totalMap[dateStr] || 0,
+      })
+    }
+    return result
+  }, [dailyTotals, selectedMonth])
+
   const hasPieData = pieData.length > 0
   const hasBarData = barData.length > 0
+  const hasDailyData = dailyData.some(d => d.amount > 0)
+
+  // ============ Chart Configs ============
 
   const pieConfig = {
     data: pieData,
     angleField: 'value',
     colorField: 'type',
+    height: 400,
     radius: 0.8,
     innerRadius: 0.6,
-    label: {
-      type: 'outer' as const,
-      content: '{name}\n¥{value}',
-    },
     legend: {
-      position: 'bottom' as const,
-      layout: 'horizontal' as const,
+      color: {
+        position: 'bottom',
+        layout: { justifyContent: 'center' },
+      },
     },
-    tooltip: {
-      formatter: (datum: { type: string; value: number }) => ({
-        name: datum.type,
-        value: `¥${datum.value.toFixed(2)}`,
-      }),
-    },
-    interactions: [{ type: 'element-active' }],
   }
 
   const barConfig = {
     data: barData,
     xField: 'month',
     yField: 'amount',
-    columnStyle: {
-      radius: [4, 4, 0, 0],
+    height: 340,
+    style: {
+      radiusTopLeft: 4,
+      radiusTopRight: 4,
     },
-    label: {
-      position: 'top' as const,
-      formatter: (v: { amount: number }) => `¥${v.amount.toFixed(0)}`,
-      style: {
-        fill: '#666',
-        fontSize: 12,
-      },
-    },
-    tooltip: {
-      formatter: (datum: { month: string; amount: number }) => ({
-        name: datum.month,
-        value: `¥${datum.amount.toFixed(2)}`,
-      }),
-    },
-    xAxis: {
-      label: { autoRotate: false },
-    },
-    yAxis: {
-      label: {
-        formatter: (v: string) => `¥${Number(v).toFixed(0)}`,
+    axis: {
+      y: {
+        labelFormatter: (v: string) => `¥${Number(v).toFixed(0)}`,
       },
     },
     color: isExpense ? '#1677ff' : '#52c41a',
   }
 
+  const dailyConfig = {
+    data: dailyData,
+    xField: 'day',
+    yField: 'amount',
+    height: 300,
+    axis: {
+      y: {
+        labelFormatter: (v: string) => `¥${Number(v).toFixed(0)}`,
+      },
+    },
+    color: isExpense ? '#ff7875' : '#73d13d',
+  }
+
+  // ============ Ranking Data ============
+  const rankingData = useMemo(
+    () => [...summary].sort((a, b) => b.total - a.total),
+    [summary]
+  )
+  const rankMaxTotal = rankingData.length > 0 ? rankingData[0].total : 1
+
   const amountColor = isExpense ? '#ff4d4f' : '#52c41a'
   const amountTitle = isExpense ? '本月总支出' : '本月总收入'
-  const pieTitle = isExpense ? '📈 本月支出构成' : '📈 本月收入构成'
+  const pieTitle = isExpense ? '📈 支出构成' : '📈 收入构成'
   const barTitle = isExpense ? '📉 近12个月支出趋势' : '📉 近12个月收入趋势'
+  const dailyTitle = isExpense ? '📊 每日支出对比' : '📊 每日收入对比'
+  const rankTitle = isExpense ? '🏆 支出排行' : '🏆 收入排行'
   const emptyPieText = isExpense ? '本月暂无支出记录' : '本月暂无收入记录'
   const emptyBarText = isExpense ? '暂无支出记录' : '暂无收入记录'
 
   return (
     <div className="statistics-page">
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>
           📊 统计
@@ -215,6 +250,7 @@ function Statistics(): JSX.Element {
         />
       )}
 
+      {/* Summary Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card loading={loading}>
@@ -250,6 +286,20 @@ function Statistics(): JSX.Element {
         </Col>
       </Row>
 
+      {/* Daily Comparison Chart */}
+      <Card title={dailyTitle} style={{ marginBottom: 24 }}>
+        {dailyTotalsLoading ? (
+          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+        ) : !hasDailyData ? (
+          <Empty description={emptyBarText} style={{ padding: '40px 0' }} />
+        ) : (
+          <div style={{ height: 300 }}>
+            <Column {...dailyConfig} />
+          </div>
+        )}
+      </Card>
+
+      {/* Pie Chart — full width */}
       <Card title={pieTitle} style={{ marginBottom: 24 }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
@@ -262,6 +312,50 @@ function Statistics(): JSX.Element {
         )}
       </Card>
 
+      {/* Ranking List */}
+      <Card title={rankTitle} style={{ marginBottom: 24 }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+        ) : rankingData.length === 0 ? (
+          <Empty description={emptyPieText} style={{ padding: '40px 0' }} />
+        ) : (
+          <Row gutter={[16, 16]}>
+            {rankingData.map((item, index) => {
+              const pct = rankMaxTotal > 0 ? (item.total / rankMaxTotal) * 100 : 0
+              const rankColors = ['#ff4d4f', '#ff7a45', '#ffa940', '#1677ff']
+              const rankColor = index < 3 ? rankColors[index] : '#999'
+              return (
+                <Col xs={24} sm={12} md={8} key={item.category_l1}>
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Space size={8}>
+                        <Tag color={index < 3 ? (isExpense ? 'red' : 'green') : 'default'} style={{ borderRadius: 10, minWidth: 28, textAlign: 'center' }}>
+                          {index + 1}
+                        </Tag>
+                        <span style={{ fontSize: 14 }}>
+                          {iconMap[item.category_l1] || '📌'} {item.category_l1}
+                        </span>
+                      </Space>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: amountColor }}>
+                        ¥{item.total.toFixed(2)}
+                      </span>
+                    </div>
+                    <Progress
+                      percent={pct}
+                      showInfo={false}
+                      strokeColor={rankColor}
+                      trailColor="#f0f0f0"
+                      size="small"
+                    />
+                  </div>
+                </Col>
+              )
+            })}
+          </Row>
+        )}
+      </Card>
+
+      {/* 12-Month Trend */}
       <Card title={barTitle}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>

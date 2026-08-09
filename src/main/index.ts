@@ -402,6 +402,29 @@ function setupIPC(): void {
     }
   })
 
+  // Get daily totals within a month (for daily comparison chart)
+  ipcMain.handle('record:getDailyTotals', (_event, params: {
+    type: 'expense' | 'income'
+    year: number
+    month: number
+  }) => {
+    try {
+      const prefix = `${params.year}-${String(params.month).padStart(2, '0')}`
+      const table = params.type === 'expense' ? 'expenses' : 'incomes'
+      const rows = db.prepare(`
+        SELECT date, SUM(amount) as total
+        FROM ${table}
+        WHERE date LIKE ?
+        GROUP BY date
+        ORDER BY date ASC
+      `).all(`${prefix}%`)
+      return rows
+    } catch (err) {
+      console.error('record:getDailyTotals error:', err)
+      return []
+    }
+  })
+
   // ============ Category IPC Handlers ============
 
   // Get all custom categories (optionally filtered by category_type)

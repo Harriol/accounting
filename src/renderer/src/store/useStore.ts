@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Expense, ExpenseInput, Income, IncomeInput, CustomCategory, CustomCategoryInput, UnifiedRecord } from '../../../preload/index'
+import type { Expense, ExpenseInput, Income, IncomeInput, CustomCategory, CustomCategoryInput, UnifiedRecord, DailyTotal } from '../../../preload/index'
 
 export type PageKey = 'record' | 'list' | 'statistics' | 'categories'
 
@@ -66,6 +66,11 @@ interface AppState {
   fetchIncomeMonthlyTotals: (months?: number) => Promise<void>
   fetchIncomeMonthlyCount: (year: number, month: number) => Promise<void>
 
+  // Daily totals (for daily comparison chart)
+  dailyTotals: DailyTotal[]
+  dailyTotalsLoading: boolean
+  fetchDailyTotals: (type: 'expense' | 'income', year: number, month: number) => Promise<void>
+
   // Categories
   customCategories: CustomCategory[]
   categoriesLoading: boolean
@@ -123,6 +128,9 @@ export const useStore = create<AppState>((set, get) => ({
   incomeMonthlyCount: 0,
   incomeStatsLoading: false,
   incomeStatsError: null,
+
+  dailyTotals: [],
+  dailyTotalsLoading: false,
 
   customCategories: [],
   categoriesLoading: false,
@@ -332,6 +340,17 @@ export const useStore = create<AppState>((set, get) => ({
       set({ incomeMonthlyCount: count })
     } catch (err) {
       console.error('Failed to fetch income monthly count:', err)
+    }
+  },
+
+  fetchDailyTotals: async (type: 'expense' | 'income', year: number, month: number) => {
+    set({ dailyTotalsLoading: true })
+    try {
+      const totals = await window.api.getDailyTotals({ type, year, month })
+      set({ dailyTotals: totals, dailyTotalsLoading: false })
+    } catch (err) {
+      console.error('Failed to fetch daily totals:', err)
+      set({ dailyTotalsLoading: false })
     }
   },
 

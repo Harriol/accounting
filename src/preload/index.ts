@@ -57,6 +57,11 @@ export interface UnifiedRecord {
   created_at: string
 }
 
+export interface DailyTotal {
+  date: string
+  total: number
+}
+
 export interface CustomCategory {
   id: string
   label: string
@@ -132,6 +137,10 @@ const api = {
     endDate?: string
   }): Promise<UnifiedRecord[]> =>
     ipcRenderer.invoke('record:getAll', filters),
+
+  // Daily totals within a month
+  getDailyTotals: (params: { type: 'expense' | 'income'; year: number; month: number }): Promise<DailyTotal[]> =>
+    ipcRenderer.invoke('record:getDailyTotals', params),
 
   addCategory: (input: CustomCategoryInput): Promise<{ success: boolean; data?: CustomCategory; error?: string }> =>
     ipcRenderer.invoke('category:add', input),
