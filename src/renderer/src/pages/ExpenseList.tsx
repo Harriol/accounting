@@ -11,49 +11,36 @@ import {
   Alert,
   message,
   Segmented,
+  Tag,
 } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
-import { categories, mergeCategories } from '../data/categories'
-import { incomeCategories, mergeIncomeCategories } from '../data/incomeCategories'
+import { categories } from '../data/categories'
+import { incomeCategories } from '../data/incomeCategories'
 import { useStore } from '../store/useStore'
-import type { Expense, Income } from '../../../preload/index'
-
-type RecordItem = Expense | Income
+import type { UnifiedRecord } from '../../../preload/index'
 
 function ExpenseList(): JSX.Element {
   const store = useStore()
 
   const {
-    // Expense state
-    expenses, expensesLoading, expensesError,
-    filterMonth, filterCategory,
-    // Income state
-    incomes, incomesLoading, incomesError,
-    incomeFilterMonth, incomeFilterCategory,
-    // Common
-    customCategories, currentMode,
+    // Unified records
+    records, recordsLoading, recordsError,
+    listType, listCategory, listDatePreset, listYear, listMonth, listDay,
+    // Custom categories
+    customCategories,
     // Actions
-    fetchExpenses, setFilterMonth, setFilterCategory, deleteExpense,
-    fetchIncomes, setIncomeFilterMonth, setIncomeFilterCategory, deleteIncome,
-    navigateTo, setMode,
+    fetchRecords, setListType, setListCategory,
+    setListDatePreset, setListYear, setListMonth, setListDay,
+    deleteExpense, deleteIncome,
+    navigateTo,
   } = store
 
   useEffect(() => {
-    fetchExpenses()
-    fetchIncomes()
+    fetchRecords()
   }, [])
 
-  const isExpense = currentMode === 'expense'
-
-  // Mode-specific data
-  const records: RecordItem[] = isExpense ? expenses : incomes
-  const loading = isExpense ? expensesLoading : incomesLoading
-  const error = isExpense ? expensesError : incomesError
-  const currentFilterMonth = isExpense ? filterMonth : incomeFilterMonth
-  const currentFilterCategory = isExpense ? filterCategory : incomeFilterCategory
-
-  // Filter custom categories by type
+  // Separate custom categories by type for icon lookups
   const expenseCustomCats = useMemo(
     () => customCategories.filter(c => c.category_type !== 'income'),
     [customCategories]
@@ -63,48 +50,98 @@ function ExpenseList(): JSX.Element {
     [customCategories]
   )
 
-  // Merge categories for filter dropdown
-  const mergedCategories = useMemo(
-    () => isExpense
-      ? mergeCategories(expenseCustomCats)
-      : mergeIncomeCategories(incomeCustomCats),
-    [isExpense, expenseCustomCats, incomeCustomCats]
-  )
-
-  // Icon maps
+  // Build icon map covering both expense and income categories
   const iconMap = useMemo(() => {
     const map: Record<string, string> = {}
-    const cats = isExpense ? categories : incomeCategories
-    const customCats = isExpense ? expenseCustomCats : incomeCustomCats
-    for (const c of cats) map[c.value] = c.icon
-    for (const c of customCats) map[c.value] = c.icon
+    for (const c of categories) map[c.value] = c.icon
+    for (const c of incomeCategories) map[c.value] = c.icon
+    for (const c of expenseCustomCats) map[c.value] = c.icon
+    for (const c of incomeCustomCats) map[c.value] = c.icon
     return map
-  }, [isExpense, expenseCustomCats, incomeCustomCats])
+  }, [expenseCustomCats, incomeCustomCats])
 
-  const totalAmount = useMemo(
-    () => records.reduce((sum, r) => sum + r.amount, 0),
+  // Build merged L1 category options for filter dropdown
+  const categoryOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const options: { label: string; value: string }[] = []
+    for (const c of categories) {
+      if (!seen.has(c.value)) {
+        seen.add(c.value)
+        options.push({ label: `${c.icon} ${c.label}`, value: c.value })
+      }
+    }
+    for (const c of incomeCategories) {
+      if (!seen.has(c.value)) {
+        seen.add(c.value)
+        options.push({ label: `${c.icon} ${c.label}`, value: c.value })
+      }
+    }
+    for (const c of customCategories) {
+      if (!seen.has(c.value) && c.parent_value === null) {
+        seen.add(c.value)
+        options.push({ label: `${c.icon} ${c.label}`, value: c.value })
+      }
+    }
+    return options
+  }, [customCategories])
+
+  // Summary calculations
+  const expenseTotal = useMemo(
+    () => records
+      .filter(r => r.record_type === 'expense')
+      .reduce((sum, r) => sum + r.amount, 0),
+    [records]
+  )
+  const incomeTotal = useMemo(
+    () => records
+      .filter(r => r.record_type === 'income')
+      .reduce((sum, r) => sum + r.amount, 0),
     [records]
   )
 
-  const handleModeChange = (val: string | number): void => {
-    setMode(val as 'expense' | 'income')
+  // Date granularity options
+  const datePresetOptions = [
+    { label: '全部时间', value: 'all' },
+    { label: '按年', value: 'year' },
+    { label: '按月', value: 'month' },
+    { label: '按日', value: 'day' },
+  ]
+
+  // DatePicker value based on current state
+  const datePickerValue = useMemo(() => {
+    if (listDatePreset === 'year' && listYear) return dayjs().year(listYear)
+    if (listDatePreset === 'month' && listYear && listMonth) return dayjs().year(listYear).month(listMonth - 1)
+    if (listDatePreset === 'day' && listYear && listMonth && listDay) return dayjs().year(listYear).month(listMonth - 1).date(listDay)
+    return null
+  }, [listDatePreset, listYear, listMonth, listDay])
+
+  const handleDateChange = (date: Dayjs | null): void => {
+    if (!date) {
+      setListDatePreset('all')
+      return
+    }
+    if (listDatePreset === 'year') {
+      setListYear(date.year())
+    } else if (listDatePreset === 'month') {
+      setListYear(date.year())
+      setListMonth(date.month() + 1)
+    } else if (listDatePreset === 'day') {
+      setListYear(date.year())
+      setListMonth(date.month() + 1)
+      setListDay(date.date())
+    }
   }
 
-  const handleMonthChange = (date: Dayjs | null): void => {
-    const val = date ? date.format('YYYY-MM') : null
-    if (isExpense) setFilterMonth(val)
-    else setIncomeFilterMonth(val)
-  }
-
-  const handleCategoryChange = (value: string | undefined): void => {
-    const val = value || null
-    if (isExpense) setFilterCategory(val)
-    else setIncomeFilterCategory(val)
-  }
-
-  const handleDelete = async (id: string): Promise<void> => {
-    const ok = isExpense ? await deleteExpense(id) : await deleteIncome(id)
-    if (!ok) {
+  const handleDelete = async (record: UnifiedRecord): Promise<void> => {
+    let ok: boolean
+    if (record.record_type === 'expense') {
+      ok = await deleteExpense(record.id)
+    } else {
+      ok = await deleteIncome(record.id)
+    }
+    if (ok) {
+      message.success('删除成功')
+    } else {
       message.error('删除失败，请重试')
     }
   }
@@ -123,54 +160,62 @@ function ExpenseList(): JSX.Element {
     return weekdays[dayjs(dateStr).day()]
   }
 
-  const amountColor = isExpense ? '#ff4d4f' : '#52c41a'
-  const amountPrefix = isExpense ? '-' : '+'
-  const countLabel = isExpense ? '笔支出' : '笔收入'
-  const emptyText = isExpense ? '暂无记账记录' : '暂无收入记录'
+  const countLabel = (() => {
+    if (listType === 'expense') return '笔支出'
+    if (listType === 'income') return '笔收入'
+    return '条记录'
+  })()
 
   return (
     <div className="expense-list-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      {/* Title + Type filter */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>
           📋 账本
         </h2>
         <Segmented
-          value={currentMode}
-          onChange={handleModeChange}
+          value={listType}
+          onChange={(val) => setListType(val as 'all' | 'expense' | 'income')}
           options={[
+            { label: '全部', value: 'all' },
             { label: '💸 支出', value: 'expense' },
             { label: '💰 收入', value: 'income' },
           ]}
         />
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      {/* Filter toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Space>
           <Select
             placeholder="全部分类"
             allowClear
-            style={{ width: 140 }}
-            onChange={handleCategoryChange}
-            value={currentFilterCategory}
-            options={mergedCategories.map(c => ({
-              label: `${c.icon} ${c.label}`,
-              value: c.value,
-            }))}
+            style={{ width: 150 }}
+            onChange={(val) => setListCategory(val || null)}
+            value={listCategory}
+            options={categoryOptions}
           />
-          <DatePicker
-            picker="month"
-            placeholder="选择月份"
-            allowClear
-            onChange={handleMonthChange}
-            value={currentFilterMonth ? dayjs(currentFilterMonth) : null}
+          <Select
+            value={listDatePreset}
+            onChange={(val) => setListDatePreset(val as 'all' | 'year' | 'month' | 'day')}
+            style={{ width: 100 }}
+            options={datePresetOptions}
           />
+          {listDatePreset !== 'all' && (
+            <DatePicker
+              picker={listDatePreset === 'year' ? 'year' : listDatePreset === 'month' ? 'month' : 'date'}
+              value={datePickerValue}
+              onChange={handleDateChange}
+              allowClear={false}
+            />
+          )}
         </Space>
       </div>
 
       <Card>
-        {error && (
+        {recordsError && (
           <Alert
-            message={error}
+            message={recordsError}
             type="warning"
             showIcon
             closable
@@ -178,6 +223,7 @@ function ExpenseList(): JSX.Element {
           />
         )}
 
+        {/* Summary bar */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -189,61 +235,80 @@ function ExpenseList(): JSX.Element {
           <span style={{ color: '#666', fontSize: 14 }}>
             共 {records.length} {countLabel}
           </span>
-          <span style={{ fontSize: 20, fontWeight: 700, color: amountColor }}>
-            {amountPrefix}¥{totalAmount.toFixed(2)}
-          </span>
+          <Space size={24}>
+            <span style={{ fontSize: 14, color: '#ff4d4f' }}>
+              支出 ¥{expenseTotal.toFixed(2)}
+            </span>
+            <span style={{ fontSize: 14, color: '#52c41a' }}>
+              收入 ¥{incomeTotal.toFixed(2)}
+            </span>
+          </Space>
         </div>
 
         {records.length === 0 ? (
           <Empty
-            description={emptyText}
+            description="暂无记账记录"
             style={{ padding: '40px 0' }}
           >
             <Button type="primary" onClick={() => navigateTo('record')}>
-              {isExpense ? '去记一笔' : '去记收入'}
+              去记一笔
             </Button>
           </Empty>
         ) : (
           <List
-            loading={loading}
+            loading={recordsLoading}
             dataSource={records}
-            renderItem={(item: RecordItem) => (
-              <div className="expense-item">
-                <div className="expense-left">
-                  <div className="expense-icon">
-                    {iconMap[item.category_l1] || '📌'}
+            renderItem={(item: UnifiedRecord) => {
+              const isExpense = item.record_type === 'expense'
+              const amountColor = isExpense ? '#ff4d4f' : '#52c41a'
+              const amountPrefix = isExpense ? '-' : '+'
+
+              return (
+                <div className="expense-item">
+                  <div className="expense-left">
+                    <div className="expense-icon">
+                      {iconMap[item.category_l1] || '📌'}
+                    </div>
+                    <div className="expense-info">
+                      <div className="expense-category">
+                        {listType === 'all' && (
+                          <Tag
+                            color={isExpense ? 'red' : 'green'}
+                            style={{ marginRight: 4, fontSize: 11, lineHeight: '18px' }}
+                          >
+                            {isExpense ? '支出' : '收入'}
+                          </Tag>
+                        )}
+                        {item.category_l1} · {item.category_l2}
+                      </div>
+                      <div className="expense-meta">
+                        {formatDate(item.date)} {formatWeekday(item.date)}
+                        {item.note && ` · ${item.note}`}
+                      </div>
+                    </div>
                   </div>
-                  <div className="expense-info">
-                    <div className="expense-category">
-                      {item.category_l1} · {item.category_l2}
-                    </div>
-                    <div className="expense-meta">
-                      {formatDate(item.date)} {formatWeekday(item.date)}
-                      {item.note && ` · ${item.note}`}
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className="expense-amount" style={{ color: amountColor }}>
+                      {amountPrefix}¥{item.amount.toFixed(2)}
+                    </span>
+                    <Popconfirm
+                      title="确定删除这条记录？"
+                      onConfirm={() => handleDelete(item)}
+                      okText="删除"
+                      cancelText="取消"
+                      placement="left"
+                    >
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                      />
+                    </Popconfirm>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span className="expense-amount" style={{ color: amountColor }}>
-                    {amountPrefix}¥{item.amount.toFixed(2)}
-                  </span>
-                  <Popconfirm
-                    title="确定删除这条记录？"
-                    onConfirm={() => handleDelete(item.id)}
-                    okText="删除"
-                    cancelText="取消"
-                    placement="left"
-                  >
-                    <Button
-                      type="text"
-                      danger
-                      size="small"
-                      icon={<DeleteOutlined />}
-                    />
-                  </Popconfirm>
-                </div>
-              </div>
-            )}
+              )
+            }}
           />
         )}
       </Card>

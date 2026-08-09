@@ -46,6 +46,17 @@ export interface MonthlyTotal {
   total: number
 }
 
+export interface UnifiedRecord {
+  id: string
+  record_type: 'expense' | 'income'
+  amount: number
+  category_l1: string
+  category_l2: string
+  date: string
+  note: string
+  created_at: string
+}
+
 export interface CustomCategory {
   id: string
   label: string
@@ -112,6 +123,15 @@ const api = {
   // Category API
   getCategories: (categoryType?: string): Promise<CustomCategory[]> =>
     ipcRenderer.invoke('category:getAll', categoryType),
+
+  // Unified records (expenses + incomes combined)
+  getRecords: (filters?: {
+    type?: 'expense' | 'income'
+    category_l1?: string
+    startDate?: string
+    endDate?: string
+  }): Promise<UnifiedRecord[]> =>
+    ipcRenderer.invoke('record:getAll', filters),
 
   addCategory: (input: CustomCategoryInput): Promise<{ success: boolean; data?: CustomCategory; error?: string }> =>
     ipcRenderer.invoke('category:add', input),

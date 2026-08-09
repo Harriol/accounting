@@ -351,6 +351,57 @@ function setupIPC(): void {
     }
   })
 
+  // ============ Unified Records ============
+
+  // Get all records (expenses + incomes combined)
+  ipcMain.handle('record:getAll', (_event, filters?: {
+    type?: 'expense' | 'income'
+    category_l1?: string
+    startDate?: string
+    endDate?: string
+  }) => {
+    try {
+      const conditions: string[] = []
+      const params: string[] = []
+
+      if (filters?.startDate) {
+        conditions.push('date >= ?')
+        params.push(filters.startDate)
+      }
+      if (filters?.endDate) {
+        conditions.push('date <= ?')
+        params.push(filters.endDate)
+      }
+      if (filters?.category_l1) {
+        conditions.push('category_l1 = ?')
+        params.push(filters.category_l1)
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+      if (filters?.type === 'expense') {
+        const query = `SELECT *, 'expense' as record_type FROM expenses ${whereClause} ORDER BY created_at DESC`
+        return db.prepare(query).all(...params)
+      } else if (filters?.type === 'income') {
+        const query = `SELECT *, 'income' as record_type FROM incomes ${whereClause} ORDER BY created_at DESC`
+        return db.prepare(query).all(...params)
+      } else {
+        // All records: UNION ALL both tables
+        const query = `
+          SELECT *, 'expense' as record_type FROM expenses ${whereClause}
+          UNION ALL
+          SELECT *, 'income' as record_type FROM incomes ${whereClause}
+          ORDER BY created_at DESC
+        `
+        // Params need to be doubled for UNION ALL (once per SELECT)
+        return db.prepare(query).all(...params, ...params)
+      }
+    } catch (err) {
+      console.error('record:getAll error:', err)
+      return []
+    }
+  })
+
   // ============ Category IPC Handlers ============
 
   // Get all custom categories (optionally filtered by category_type)

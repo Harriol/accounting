@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Expense, ExpenseInput, Income, IncomeInput, CustomCategory, CustomCategoryInput } from '../../../preload/index'
+import type { Expense, ExpenseInput, Income, IncomeInput, CustomCategory, CustomCategoryInput, UnifiedRecord } from '../../../preload/index'
 
 export type PageKey = 'record' | 'list' | 'statistics' | 'categories'
 
@@ -73,6 +73,24 @@ interface AppState {
   addCategory: (input: CustomCategoryInput) => Promise<{ success: boolean; error?: string }>
   updateCategory: (input: { id: string; label: string; icon: string }) => Promise<{ success: boolean; error?: string }>
   deleteCategory: (id: string) => Promise<{ success: boolean; error?: string }>
+
+  // Unified records (账本 — merged expenses + incomes)
+  records: UnifiedRecord[]
+  recordsLoading: boolean
+  recordsError: string | null
+  listType: 'all' | 'expense' | 'income'
+  listCategory: string | null
+  listDatePreset: 'all' | 'year' | 'month' | 'day'
+  listYear: number | null
+  listMonth: number | null
+  listDay: number | null
+  fetchRecords: () => Promise<void>
+  setListType: (type: 'all' | 'expense' | 'income') => void
+  setListCategory: (category: string | null) => void
+  setListDatePreset: (preset: 'all' | 'year' | 'month' | 'day') => void
+  setListYear: (year: number | null) => void
+  setListMonth: (month: number | null) => void
+  setListDay: (day: number | null) => void
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -108,6 +126,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   customCategories: [],
   categoriesLoading: false,
+
+  // Unified records initial state
+  records: [],
+  recordsLoading: false,
+  recordsError: null,
+  listType: 'all',
+  listCategory: null,
+  listDatePreset: 'all',
+  listYear: null,
+  listMonth: null,
+  listDay: null,
 
   fetchExpenses: async () => {
     set({ expensesLoading: true, expensesError: null })
@@ -339,5 +368,84 @@ export const useStore = create<AppState>((set, get) => ({
       await get().fetchCategories()
     }
     return result
+  },
+
+  // Unified records actions
+  fetchRecords: async () => {
+    set({ recordsLoading: true, recordsError: null })
+    try {
+      const { listType, listCategory, listDatePreset, listYear, listMonth, listDay } = get()
+      const filters: {
+        type?: 'expense' | 'income'
+        category_l1?: string
+        startDate?: string
+        endDate?: string
+      } = {}
+
+      // Type filter
+      if (listType !== 'all') {
+        filters.type = listType
+      }
+
+      // Category filter
+      if (listCategory) {
+        filters.category_l1 = listCategory
+      }
+
+      // Date filter based on preset
+      if (listDatePreset === 'year' && listYear) {
+        const y = String(listYear)
+        filters.startDate = `${y}-01-01`
+        filters.endDate = `${y}-12-31`
+      } else if (listDatePreset === 'month' && listYear && listMonth) {
+        const y = String(listYear)
+        const m = String(listMonth).padStart(2, '0')
+        const lastDay = new Date(listYear, listMonth, 0).getDate()
+        filters.startDate = `${y}-${m}-01`
+        filters.endDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
+      } else if (listDatePreset === 'day' && listYear && listMonth && listDay) {
+        const y = String(listYear)
+        const m = String(listMonth).padStart(2, '0')
+        const d = String(listDay).padStart(2, '0')
+        filters.startDate = `${y}-${m}-${d}`
+        filters.endDate = `${y}-${m}-${d}`
+      }
+
+      const records = await window.api.getRecords(filters)
+      set({ records, recordsLoading: false })
+    } catch (err) {
+      console.error('Failed to fetch records:', err)
+      set({ recordsLoading: false, recordsError: '加载数据失败，请重试' })
+    }
+  },
+
+  setListType: (type) => {
+    set({ listType: type })
+    get().fetchRecords()
+  },
+
+  setListCategory: (category) => {
+    set({ listCategory: category })
+    get().fetchRecords()
+  },
+
+  setListDatePreset: (preset) => {
+    set({ listDatePreset: preset, listYear: null, listMonth: null, listDay: null })
+    get().fetchRecords()
+  },
+
+  setListYear: (year) => {
+    set({ listYear: year, listMonth: null, listDay: null })
+    if (year !== null) get().fetchRecords()
+  },
+
+  setListMonth: (month) => {
+    set({ listMonth: month, listDay: null })
+    if (month !== null) get().fetchRecords()
+  },
+
+  setListDay: (day) => {
+    set({ listDay: day })
+    if (day !== null) get().fetchRecords()
   },
 }))

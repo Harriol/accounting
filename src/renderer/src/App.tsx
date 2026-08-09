@@ -25,10 +25,12 @@ function App(): JSX.Element {
   const currentPage = useStore(s => s.currentPage)
   const navigateTo = useStore(s => s.navigateTo)
   const fetchExpenses = useStore(s => s.fetchExpenses)
+  const fetchRecords = useStore(s => s.fetchRecords)
   const fetchCategories = useStore(s => s.fetchCategories)
 
   useEffect(() => {
     fetchExpenses()
+    fetchRecords()
     fetchCategories()
   }, [])
 
