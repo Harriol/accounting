@@ -32,6 +32,49 @@ function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
     CREATE INDEX IF NOT EXISTS idx_expenses_category_l1 ON expenses(category_l1);
   `)
+
+  // Custom categories table (user-created categories)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS custom_categories (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      value TEXT NOT NULL UNIQUE,
+      icon TEXT DEFAULT '📌',
+      parent_value TEXT,
+      is_preset INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_custom_categories_parent ON custom_categories(parent_value);
+  `)
+
+  // Add category_type column for existing databases (expense/income distinction)
+  try {
+    db.exec(`ALTER TABLE custom_categories ADD COLUMN category_type TEXT DEFAULT 'expense'`)
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Incomes table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS incomes (
+      id TEXT PRIMARY KEY,
+      amount REAL NOT NULL,
+      category_l1 TEXT NOT NULL,
+      category_l2 TEXT NOT NULL,
+      date TEXT NOT NULL,
+      note TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_incomes_date ON incomes(date);
+    CREATE INDEX IF NOT EXISTS idx_incomes_category_l1 ON incomes(category_l1);
+  `)
 }
 
 // ============ IPC Handlers ============
@@ -168,6 +211,246 @@ function setupIPC(): void {
     } catch (err) {
       console.error('expense:getMonthlyTotals error:', err)
       return []
+    }
+  })
+
+  // ============ Income IPC Handlers ============
+
+  // Add income
+  ipcMain.handle('income:add', (_event, income: {
+    amount: number
+    category_l1: string
+    category_l2: string
+    date: string
+    note?: string
+  }) => {
+    try {
+      const id = uuidv4()
+      const createdAt = new Date().toISOString()
+      const stmt = db.prepare(
+        'INSERT INTO incomes (id, amount, category_l1, category_l2, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      )
+      stmt.run(id, income.amount, income.category_l1, income.category_l2, income.date, income.note || '', createdAt)
+      return { id, ...income, note: income.note || '', created_at: createdAt }
+    } catch (err) {
+      console.error('income:add error:', err)
+      throw new Error('Failed to add income')
+    }
+  })
+
+  // Get all incomes
+  ipcMain.handle('income:getAll', (_event, filters?: {
+    startDate?: string
+    endDate?: string
+    category_l1?: string
+  }) => {
+    try {
+      let query = 'SELECT * FROM incomes WHERE 1=1'
+      const params: (string | number)[] = []
+
+      if (filters?.startDate) {
+        query += ' AND date >= ?'
+        params.push(filters.startDate)
+      }
+      if (filters?.endDate) {
+        query += ' AND date <= ?'
+        params.push(filters.endDate)
+      }
+      if (filters?.category_l1) {
+        query += ' AND category_l1 = ?'
+        params.push(filters.category_l1)
+      }
+
+      query += ' ORDER BY date DESC, created_at DESC'
+      return db.prepare(query).all(...params)
+    } catch (err) {
+      console.error('income:getAll error:', err)
+      return []
+    }
+  })
+
+  // Get income count for a specific month
+  ipcMain.handle('income:getMonthlyCount', (_event, year: number, month: number) => {
+    try {
+      const prefix = `${year}-${String(month).padStart(2, '0')}`
+      const row = db.prepare(
+        'SELECT COUNT(*) as count FROM incomes WHERE date LIKE ?'
+      ).get(`${prefix}%`) as { count: number }
+      return row.count
+    } catch (err) {
+      console.error('income:getMonthlyCount error:', err)
+      return 0
+    }
+  })
+
+  // Delete income
+  ipcMain.handle('income:delete', (_event, id: string) => {
+    try {
+      const stmt = db.prepare('DELETE FROM incomes WHERE id = ?')
+      const result = stmt.run(id)
+      return { success: result.changes > 0 }
+    } catch (err) {
+      console.error('income:delete error:', err)
+      return { success: false }
+    }
+  })
+
+  // Update income
+  ipcMain.handle('income:update', (_event, income: {
+    id: string
+    amount: number
+    category_l1: string
+    category_l2: string
+    date: string
+    note?: string
+  }) => {
+    try {
+      const stmt = db.prepare(
+        'UPDATE incomes SET amount = ?, category_l1 = ?, category_l2 = ?, date = ?, note = ? WHERE id = ?'
+      )
+      const result = stmt.run(income.amount, income.category_l1, income.category_l2, income.date, income.note || '', income.id)
+      return { success: result.changes > 0 }
+    } catch (err) {
+      console.error('income:update error:', err)
+      return { success: false }
+    }
+  })
+
+  // Get monthly income summary for statistics
+  ipcMain.handle('income:getMonthlySummary', (_event, year: number, month: number) => {
+    try {
+      const prefix = `${year}-${String(month).padStart(2, '0')}`
+      const rows = db.prepare(`
+        SELECT category_l1, SUM(amount) as total
+        FROM incomes
+        WHERE date LIKE ?
+        GROUP BY category_l1
+        ORDER BY total DESC
+      `).all(`${prefix}%`)
+      return rows
+    } catch (err) {
+      console.error('income:getMonthlySummary error:', err)
+      return []
+    }
+  })
+
+  // Get monthly income totals for trend chart
+  ipcMain.handle('income:getMonthlyTotals', (_event, months: number = 12) => {
+    try {
+      const rows = db.prepare(`
+        SELECT substr(date, 1, 7) as month, SUM(amount) as total
+        FROM incomes
+        GROUP BY month
+        ORDER BY month DESC
+        LIMIT ?
+      `).all(months)
+      return rows
+    } catch (err) {
+      console.error('income:getMonthlyTotals error:', err)
+      return []
+    }
+  })
+
+  // ============ Category IPC Handlers ============
+
+  // Get all custom categories (optionally filtered by category_type)
+  ipcMain.handle('category:getAll', (_event, categoryType?: string) => {
+    try {
+      if (categoryType) {
+        return db.prepare(
+          'SELECT * FROM custom_categories WHERE category_type = ? ORDER BY sort_order, created_at'
+        ).all(categoryType)
+      }
+      return db.prepare(
+        'SELECT * FROM custom_categories ORDER BY sort_order, created_at'
+      ).all()
+    } catch (err) {
+      console.error('category:getAll error:', err)
+      return []
+    }
+  })
+
+  // Add a custom category
+  ipcMain.handle('category:add', (_event, input: {
+    label: string
+    icon: string
+    parent_value: string | null
+    category_type?: string
+  }) => {
+    try {
+      const id = uuidv4()
+      const value = `custom_${id.substring(0, 8)}`
+      const categoryType = input.category_type || 'expense'
+
+      // Check for duplicate name under the same parent and type
+      const existing = db.prepare(
+        'SELECT id FROM custom_categories WHERE label = ? AND parent_value IS ? AND category_type = ?'
+      ).get(input.label, input.parent_value, categoryType)
+      if (existing) {
+        return { success: false, error: '同名分类已存在' }
+      }
+
+      const stmt = db.prepare(
+        'INSERT INTO custom_categories (id, label, value, icon, parent_value, category_type) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+      stmt.run(id, input.label, value, input.icon, input.parent_value, categoryType)
+
+      const created = db.prepare('SELECT * FROM custom_categories WHERE id = ?').get(id)
+      return { success: true, data: created }
+    } catch (err) {
+      console.error('category:add error:', err)
+      return { success: false, error: '添加分类失败' }
+    }
+  })
+
+  // Update a custom category (name and/or icon)
+  ipcMain.handle('category:update', (_event, input: {
+    id: string
+    label: string
+    icon: string
+  }) => {
+    try {
+      // Only allow updating non-preset categories
+      const cat = db.prepare('SELECT * FROM custom_categories WHERE id = ?').get(input.id) as { is_preset: number } | undefined
+      if (!cat) {
+        return { success: false, error: '分类不存在' }
+      }
+      if (cat.is_preset === 1) {
+        return { success: false, error: '预设分类不可修改' }
+      }
+
+      const stmt = db.prepare('UPDATE custom_categories SET label = ?, icon = ? WHERE id = ?')
+      const result = stmt.run(input.label, input.icon, input.id)
+      return { success: result.changes > 0 }
+    } catch (err) {
+      console.error('category:update error:', err)
+      return { success: false }
+    }
+  })
+
+  // Delete a custom category
+  ipcMain.handle('category:delete', (_event, id: string) => {
+    try {
+      const cat = db.prepare('SELECT * FROM custom_categories WHERE id = ?').get(id) as { is_preset: number; parent_value: string | null } | undefined
+      if (!cat) {
+        return { success: false, error: '分类不存在' }
+      }
+      if (cat.is_preset === 1) {
+        return { success: false, error: '预设分类不可删除' }
+      }
+
+      // If it's a L1 category, cascade delete all its L2 children
+      if (cat.parent_value === null) {
+        // Find the L1's value to identify its children
+        const l1Cat = db.prepare('SELECT value FROM custom_categories WHERE id = ?').get(id) as { value: string }
+        db.prepare('DELETE FROM custom_categories WHERE parent_value = ?').run(l1Cat.value)
+      }
+
+      const result = db.prepare('DELETE FROM custom_categories WHERE id = ?').run(id)
+      return { success: result.changes > 0 }
+    } catch (err) {
+      console.error('category:delete error:', err)
+      return { success: false }
     }
   })
 }

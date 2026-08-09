@@ -138,3 +138,51 @@ export function getSubCategories(categoryValue: string): SubCategory[] {
   const cat = categories.find(c => c.value === categoryValue)
   return cat?.children || []
 }
+
+/** Merge preset categories with user-created custom categories */
+export function mergeCategories(customCategories: { id: string; label: string; value: string; icon: string; parent_value: string | null; is_preset: number }[]): Category[] {
+  // Deep clone the preset categories so we don't mutate the original
+  const merged: Category[] = categories.map(cat => ({
+    ...cat,
+    children: [...cat.children],
+  }))
+
+  // Group custom categories by parent
+  const customL1: typeof customCategories = []
+  const customL2ByParent: Record<string, SubCategory[]> = {}
+
+  for (const cc of customCategories) {
+    if (cc.parent_value === null) {
+      customL1.push(cc)
+    } else {
+      if (!customL2ByParent[cc.parent_value]) {
+        customL2ByParent[cc.parent_value] = []
+      }
+      customL2ByParent[cc.parent_value].push({
+        label: cc.label,
+        value: cc.value,
+      })
+    }
+  }
+
+  // Append custom L2 subcategories to their parent L1
+  for (const cat of merged) {
+    const customChildren = customL2ByParent[cat.value]
+    if (customChildren) {
+      cat.children.push(...customChildren)
+    }
+  }
+
+  // Also check custom L1 categories that have L2 children
+  for (const l1 of customL1) {
+    const children = customL2ByParent[l1.value] || []
+    merged.push({
+      label: l1.label,
+      value: l1.value,
+      icon: l1.icon,
+      children,
+    })
+  }
+
+  return merged
+}

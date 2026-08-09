@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Card,
   Form,
@@ -7,12 +7,12 @@ import {
   Input,
   Button,
   message,
-  Row,
-  Col,
+  Segmented,
 } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
-import { categories, getSubCategories } from '../data/categories'
+import { mergeCategories } from '../data/categories'
+import { mergeIncomeCategories } from '../data/incomeCategories'
 import { useStore } from '../store/useStore'
 
 function RecordExpense(): JSX.Element {
@@ -20,7 +20,33 @@ function RecordExpense(): JSX.Element {
   const [selectedL1, setSelectedL1] = useState<string | null>(null)
   const [selectedL2, setSelectedL2] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
   const addExpense = useStore(s => s.addExpense)
+  const addIncome = useStore(s => s.addIncome)
+  const customCategories = useStore(s => s.customCategories)
+  const currentMode = useStore(s => s.currentMode)
+  const setMode = useStore(s => s.setMode)
+
+  // Pick the right merger and categories based on mode
+  const isExpense = currentMode === 'expense'
+
+  // Filter custom categories by type
+  const expenseCustomCategories = useMemo(
+    () => customCategories.filter(c => c.category_type !== 'income'),
+    [customCategories]
+  )
+  const incomeCustomCategories = useMemo(
+    () => customCategories.filter(c => c.category_type === 'income'),
+    [customCategories]
+  )
+
+  // Merge preset + custom for display
+  const mergedCategories = useMemo(
+    () => isExpense
+      ? mergeCategories(expenseCustomCategories)
+      : mergeIncomeCategories(incomeCustomCategories),
+    [isExpense, expenseCustomCategories, incomeCustomCategories]
+  )
 
   const handleL1Select = (value: string): void => {
     setSelectedL1(value)
@@ -33,49 +59,79 @@ function RecordExpense(): JSX.Element {
     form.setFieldsValue({ category_l2: value })
   }
 
+  const handleModeChange = (val: string | number): void => {
+    setMode(val as 'expense' | 'income')
+    setSelectedL1(null)
+    setSelectedL2(null)
+    form.resetFields()
+    form.setFieldsValue({ date: dayjs() })
+  }
+
   const handleSubmit = async (values: {
     amount: number
     date: Dayjs
     note?: string
   }): Promise<void> => {
     if (!selectedL1 || !selectedL2) {
-      message.warning('请选择支出分类')
+      message.warning(isExpense ? '请选择支出分类' : '请选择收入分类')
       return
     }
 
     setSubmitting(true)
     try {
-      await addExpense({
+      const data = {
         amount: values.amount,
         category_l1: selectedL1,
         category_l2: selectedL2,
         date: values.date.format('YYYY-MM-DD'),
         note: values.note || '',
-      })
-      message.success('记账成功！')
+      }
+      if (isExpense) {
+        await addExpense(data)
+        message.success('记账成功！')
+      } else {
+        await addIncome(data)
+        message.success('收入记录成功！')
+      }
 
-      // Reset form
       form.resetFields()
       form.setFieldsValue({ date: dayjs() })
       setSelectedL1(null)
       setSelectedL2(null)
     } catch (err) {
-      message.error('记账失败，请重试')
+      message.error(isExpense ? '记账失败，请重试' : '收入记录失败，请重试')
       console.error(err)
     } finally {
       setSubmitting(false)
     }
   }
 
-  const subCategories = selectedL1 ? getSubCategories(selectedL1) : []
-  const selectedCategory = categories.find(c => c.value === selectedL1)
+  const subCategories = useMemo(() => {
+    if (!selectedL1) return []
+    const cat = mergedCategories.find(c => c.value === selectedL1)
+    return cat?.children || []
+  }, [selectedL1, mergedCategories])
+
+  const selectedCategory = mergedCategories.find(c => c.value === selectedL1)
+  const pageTitle = isExpense ? '记一笔' : '记收入'
+  const amountColor = isExpense ? '#ff4d4f' : '#52c41a'
 
   return (
     <div className="record-page">
-      <h2 style={{ marginBottom: 24, fontSize: 22, fontWeight: 600 }}>
-        <PlusOutlined style={{ marginRight: 8 }} />
-        记一笔
-      </h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>
+          <PlusOutlined style={{ marginRight: 8 }} />
+          {pageTitle}
+        </h2>
+        <Segmented
+          value={currentMode}
+          onChange={handleModeChange}
+          options={[
+            { label: '💸 支出', value: 'expense' },
+            { label: '💰 收入', value: 'income' },
+          ]}
+        />
+      </div>
 
       <Card>
         <Form
@@ -87,7 +143,7 @@ function RecordExpense(): JSX.Element {
         >
           <Form.Item
             name="amount"
-            label="金额（元）"
+            label={isExpense ? '金额（元）' : '收入金额（元）'}
             rules={[
               { required: true, message: '请输入金额' },
               { type: 'number', min: 0.01, message: '金额必须大于0' },
@@ -100,6 +156,7 @@ function RecordExpense(): JSX.Element {
               prefix="¥"
               controls={false}
               addonAfter="CNY"
+              styles={{ prefix: { color: amountColor } }}
             />
           </Form.Item>
 
@@ -111,13 +168,11 @@ function RecordExpense(): JSX.Element {
             <DatePicker style={{ width: '100%' }} allowClear={false} />
           </Form.Item>
 
-          {/* Category Selection */}
-          <Form.Item label="支出分类" required>
-            {/* Level 1 */}
+          <Form.Item label={isExpense ? '支出分类' : '收入分类'} required>
             <div style={{ marginBottom: 12 }}>
               <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>一级分类</div>
               <div className="category-grid">
-                {categories.map(cat => (
+                {mergedCategories.map(cat => (
                   <div
                     key={cat.value}
                     className={`category-tag ${selectedL1 === cat.value ? 'active' : ''}`}
@@ -129,7 +184,6 @@ function RecordExpense(): JSX.Element {
               </div>
             </div>
 
-            {/* Level 2 */}
             {selectedL1 && (
               <div style={{ marginTop: 16 }}>
                 <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>
@@ -155,7 +209,6 @@ function RecordExpense(): JSX.Element {
             )}
           </Form.Item>
 
-          {/* Hidden form fields to store category values */}
           <Form.Item name="category_l1" hidden>
             <input type="hidden" />
           </Form.Item>
@@ -180,8 +233,9 @@ function RecordExpense(): JSX.Element {
               block
               size="large"
               icon={<PlusOutlined />}
+              style={isExpense ? {} : { background: '#52c41a', borderColor: '#52c41a' }}
             >
-              记一笔
+              {isExpense ? '记一笔' : '记录收入'}
             </Button>
           </Form.Item>
         </Form>

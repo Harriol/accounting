@@ -4,10 +4,12 @@ import {
   PlusOutlined,
   UnorderedListOutlined,
   PieChartOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons'
 import RecordExpense from './pages/RecordExpense'
 import ExpenseList from './pages/ExpenseList'
 import Statistics from './pages/Statistics'
+import CategoryManagement from './pages/CategoryManagement'
 import { useStore, PageKey } from './store/useStore'
 
 const { Sider, Content } = Layout
@@ -16,15 +18,18 @@ const menuItems = [
   { key: 'record', icon: <PlusOutlined />, label: '记一笔' },
   { key: 'list', icon: <UnorderedListOutlined />, label: '账本' },
   { key: 'statistics', icon: <PieChartOutlined />, label: '统计' },
+  { key: 'categories', icon: <AppstoreOutlined />, label: '分类' },
 ]
 
 function App(): JSX.Element {
   const currentPage = useStore(s => s.currentPage)
   const navigateTo = useStore(s => s.navigateTo)
   const fetchExpenses = useStore(s => s.fetchExpenses)
+  const fetchCategories = useStore(s => s.fetchCategories)
 
   useEffect(() => {
     fetchExpenses()
+    fetchCategories()
   }, [])
 
   const renderPage = (): JSX.Element => {
@@ -35,6 +40,8 @@ function App(): JSX.Element {
         return <ExpenseList />
       case 'statistics':
         return <Statistics />
+      case 'categories':
+        return <CategoryManagement />
       default:
         return <RecordExpense />
     }

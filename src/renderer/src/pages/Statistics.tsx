@@ -8,76 +8,117 @@ import {
   Spin,
   Empty,
   Alert,
+  Segmented,
+  Space,
 } from 'antd'
 import { Pie, Column } from '@ant-design/charts'
 import dayjs, { Dayjs } from 'dayjs'
-import { getCategoryIcon } from '../data/categories'
+import { categories } from '../data/categories'
+import { incomeCategories } from '../data/incomeCategories'
 import { useStore } from '../store/useStore'
 
 function Statistics(): JSX.Element {
+  const store = useStore()
   const {
-    monthlySummary,
-    monthlyTotals,
-    monthlyCount,
-    statsLoading,
-    statsError,
-    fetchMonthlySummary,
-    fetchMonthlyTotals,
-    fetchMonthlyCount,
-  } = useStore()
+    // Expense stats
+    monthlySummary, monthlyTotals, monthlyCount,
+    statsLoading, statsError,
+    // Income stats
+    incomeMonthlySummary, incomeMonthlyTotals, incomeMonthlyCount,
+    incomeStatsLoading, incomeStatsError,
+    // Common
+    customCategories, currentMode,
+    // Actions
+    fetchMonthlySummary, fetchMonthlyTotals, fetchMonthlyCount,
+    fetchIncomeMonthlySummary, fetchIncomeMonthlyTotals, fetchIncomeMonthlyCount,
+    setMode,
+  } = store
 
   const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs())
+  const isExpense = currentMode === 'expense'
 
   useEffect(() => {
     const year = selectedMonth.year()
     const month = selectedMonth.month() + 1
-    fetchMonthlySummary(year, month)
-    fetchMonthlyCount(year, month)
-  }, [selectedMonth, fetchMonthlySummary, fetchMonthlyCount])
+    if (isExpense) {
+      fetchMonthlySummary(year, month)
+      fetchMonthlyCount(year, month)
+    } else {
+      fetchIncomeMonthlySummary(year, month)
+      fetchIncomeMonthlyCount(year, month)
+    }
+  }, [selectedMonth, isExpense])
 
   useEffect(() => {
-    fetchMonthlyTotals(12)
-  }, [fetchMonthlyTotals])
+    if (isExpense) {
+      fetchMonthlyTotals(12)
+    } else {
+      fetchIncomeMonthlyTotals(12)
+    }
+  }, [isExpense])
 
   const handleMonthChange = (date: Dayjs | null): void => {
     if (date) setSelectedMonth(date)
   }
 
-  // Calculate total for selected month
-  const monthTotal = useMemo(
-    () => monthlySummary.reduce((sum, item) => sum + item.total, 0),
-    [monthlySummary]
+  const handleModeChange = (val: string | number): void => {
+    setMode(val as 'expense' | 'income')
+  }
+
+  // Mode-specific data
+  const summary = isExpense ? monthlySummary : incomeMonthlySummary
+  const totals = isExpense ? monthlyTotals : incomeMonthlyTotals
+  const count = isExpense ? monthlyCount : incomeMonthlyCount
+  const loading = isExpense ? statsLoading : incomeStatsLoading
+  const error = isExpense ? statsError : incomeStatsError
+
+  // Filter custom categories by type
+  const customCats = useMemo(
+    () => customCategories.filter(c =>
+      isExpense ? c.category_type !== 'income' : c.category_type === 'income'
+    ),
+    [isExpense, customCategories]
   )
 
-  // Daily average
+  // Icon map
+  const iconMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    const cats = isExpense ? categories : incomeCategories
+    for (const c of cats) map[c.value] = c.icon
+    for (const c of customCats) map[c.value] = c.icon
+    return map
+  }, [isExpense, customCats])
+
+  const monthTotal = useMemo(
+    () => summary.reduce((sum, item) => sum + item.total, 0),
+    [summary]
+  )
+
   const dailyAvg = useMemo(
     () => monthTotal > 0 ? monthTotal / Math.max(1, selectedMonth.daysInMonth()) : 0,
     [monthTotal, selectedMonth]
   )
 
-  // Prepare pie chart data
   const pieData = useMemo(
-    () => monthlySummary.map(item => ({
+    () => summary.map(item => ({
       type: item.category_l1,
       value: item.total,
-      icon: getCategoryIcon(item.category_l1),
+      icon: iconMap[item.category_l1] || '📌',
     })),
-    [monthlySummary]
+    [summary, iconMap]
   )
 
-  // Prepare bar chart data (oldest first for time-series display)
   const barData = useMemo(
-    () => [...monthlyTotals].reverse().map(item => ({
+    () => [...totals].reverse().map(item => ({
       month: item.month,
       amount: item.total,
     })),
-    [monthlyTotals]
+    [totals]
   )
 
   const hasPieData = pieData.length > 0
   const hasBarData = barData.length > 0
 
-  // Pie chart config
   const pieConfig = {
     data: pieData,
     angleField: 'value',
@@ -101,7 +142,6 @@ function Statistics(): JSX.Element {
     interactions: [{ type: 'element-active' }],
   }
 
-  // Bar chart config
   const barConfig = {
     data: barData,
     xField: 'month',
@@ -131,8 +171,15 @@ function Statistics(): JSX.Element {
         formatter: (v: string) => `¥${Number(v).toFixed(0)}`,
       },
     },
-    color: '#1677ff',
+    color: isExpense ? '#1677ff' : '#52c41a',
   }
+
+  const amountColor = isExpense ? '#ff4d4f' : '#52c41a'
+  const amountTitle = isExpense ? '本月总支出' : '本月总收入'
+  const pieTitle = isExpense ? '📈 本月支出构成' : '📈 本月收入构成'
+  const barTitle = isExpense ? '📉 近12个月支出趋势' : '📉 近12个月收入趋势'
+  const emptyPieText = isExpense ? '本月暂无支出记录' : '本月暂无收入记录'
+  const emptyBarText = isExpense ? '暂无支出记录' : '暂无收入记录'
 
   return (
     <div className="statistics-page">
@@ -140,18 +187,27 @@ function Statistics(): JSX.Element {
         <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>
           📊 统计
         </h2>
-        <DatePicker
-          picker="month"
-          value={selectedMonth}
-          onChange={handleMonthChange}
-          allowClear={false}
-        />
+        <Space>
+          <Segmented
+            value={currentMode}
+            onChange={handleModeChange}
+            options={[
+              { label: '💸 支出', value: 'expense' },
+              { label: '💰 收入', value: 'income' },
+            ]}
+          />
+          <DatePicker
+            picker="month"
+            value={selectedMonth}
+            onChange={handleMonthChange}
+            allowClear={false}
+          />
+        </Space>
       </div>
 
-      {/* Error banner */}
-      {statsError && (
+      {error && (
         <Alert
-          message={statsError}
+          message={error}
           type="warning"
           showIcon
           closable
@@ -159,33 +215,32 @@ function Statistics(): JSX.Element {
         />
       )}
 
-      {/* Summary Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
-          <Card loading={statsLoading}>
+          <Card loading={loading}>
             <Statistic
-              title="本月总支出"
+              title={amountTitle}
               value={monthTotal}
               precision={2}
               prefix="¥"
-              valueStyle={{ color: '#ff4d4f', fontWeight: 700 }}
+              valueStyle={{ color: amountColor, fontWeight: 700 }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
-          <Card loading={statsLoading}>
+          <Card loading={loading}>
             <Statistic
               title="本月笔数"
-              value={monthlyCount}
+              value={count}
               suffix="笔"
               valueStyle={{ fontWeight: 700 }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
-          <Card loading={statsLoading}>
+          <Card loading={loading}>
             <Statistic
-              title="日均支出"
+              title="日均"
               value={dailyAvg}
               precision={2}
               prefix="¥"
@@ -195,12 +250,11 @@ function Statistics(): JSX.Element {
         </Col>
       </Row>
 
-      {/* Pie Chart - Category Distribution */}
-      <Card title="📈 本月支出构成" style={{ marginBottom: 24 }}>
-        {statsLoading ? (
+      <Card title={pieTitle} style={{ marginBottom: 24 }}>
+        {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
         ) : !hasPieData ? (
-          <Empty description="本月暂无支出记录" style={{ padding: '40px 0' }} />
+          <Empty description={emptyPieText} style={{ padding: '40px 0' }} />
         ) : (
           <div style={{ height: 400 }}>
             <Pie {...pieConfig} />
@@ -208,12 +262,11 @@ function Statistics(): JSX.Element {
         )}
       </Card>
 
-      {/* Bar Chart - Monthly Trend */}
-      <Card title="📉 近12个月支出趋势">
-        {statsLoading ? (
+      <Card title={barTitle}>
+        {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
         ) : !hasBarData ? (
-          <Empty description="暂无支出记录" style={{ padding: '40px 0' }} />
+          <Empty description={emptyBarText} style={{ padding: '40px 0' }} />
         ) : (
           <div style={{ height: 340 }}>
             <Column {...barConfig} />

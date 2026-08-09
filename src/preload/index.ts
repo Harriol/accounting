@@ -18,6 +18,24 @@ export interface ExpenseInput {
   note?: string
 }
 
+export interface Income {
+  id: string
+  amount: number
+  category_l1: string
+  category_l2: string
+  date: string
+  note: string
+  created_at: string
+}
+
+export interface IncomeInput {
+  amount: number
+  category_l1: string
+  category_l2: string
+  date: string
+  note?: string
+}
+
 export interface MonthlySummary {
   category_l1: string
   total: number
@@ -26,6 +44,25 @@ export interface MonthlySummary {
 export interface MonthlyTotal {
   month: string
   total: number
+}
+
+export interface CustomCategory {
+  id: string
+  label: string
+  value: string
+  icon: string
+  parent_value: string | null
+  is_preset: number
+  sort_order: number
+  category_type: string
+  created_at: string
+}
+
+export interface CustomCategoryInput {
+  label: string
+  icon: string
+  parent_value: string | null
+  category_type?: string
 }
 
 const api = {
@@ -48,7 +85,42 @@ const api = {
     ipcRenderer.invoke('expense:getMonthlyTotals', months),
 
   getMonthlyCount: (year: number, month: number): Promise<number> =>
-    ipcRenderer.invoke('expense:getMonthlyCount', year, month)
+    ipcRenderer.invoke('expense:getMonthlyCount', year, month),
+
+  // Income API
+  addIncome: (income: IncomeInput): Promise<Income> =>
+    ipcRenderer.invoke('income:add', income),
+
+  getIncomes: (filters?: { startDate?: string; endDate?: string; category_l1?: string }): Promise<Income[]> =>
+    ipcRenderer.invoke('income:getAll', filters),
+
+  deleteIncome: (id: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('income:delete', id),
+
+  updateIncome: (income: IncomeInput & { id: string }): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('income:update', income),
+
+  getIncomeMonthlySummary: (year: number, month: number): Promise<MonthlySummary[]> =>
+    ipcRenderer.invoke('income:getMonthlySummary', year, month),
+
+  getIncomeMonthlyTotals: (months?: number): Promise<MonthlyTotal[]> =>
+    ipcRenderer.invoke('income:getMonthlyTotals', months),
+
+  getIncomeMonthlyCount: (year: number, month: number): Promise<number> =>
+    ipcRenderer.invoke('income:getMonthlyCount', year, month),
+
+  // Category API
+  getCategories: (categoryType?: string): Promise<CustomCategory[]> =>
+    ipcRenderer.invoke('category:getAll', categoryType),
+
+  addCategory: (input: CustomCategoryInput): Promise<{ success: boolean; data?: CustomCategory; error?: string }> =>
+    ipcRenderer.invoke('category:add', input),
+
+  updateCategory: (input: { id: string; label: string; icon: string }): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('category:update', input),
+
+  deleteCategory: (id: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('category:delete', id)
 }
 
 contextBridge.exposeInMainWorld('api', api)
