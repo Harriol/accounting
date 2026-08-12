@@ -245,3 +245,9 @@ body {
   border-color: #1677ff;
   background: #e6f4ff;
 }
+
+/* ============ Snake Game Page ============ */
+.snake-game-page {
+  max-width: 600px;
+  margin: 0 auto;
+}

@@ -5,11 +5,13 @@ import {
   UnorderedListOutlined,
   PieChartOutlined,
   AppstoreOutlined,
+  RocketOutlined,
 } from '@ant-design/icons'
 import RecordExpense from './pages/RecordExpense'
 import ExpenseList from './pages/ExpenseList'
 import Statistics from './pages/Statistics'
 import CategoryManagement from './pages/CategoryManagement'
+import SnakeGame from './pages/SnakeGame'
 import { useStore, PageKey } from './store/useStore'
 
 const { Sider, Content } = Layout
@@ -19,6 +21,7 @@ const menuItems = [
   { key: 'list', icon: <UnorderedListOutlined />, label: '账本' },
   { key: 'statistics', icon: <PieChartOutlined />, label: '统计' },
   { key: 'categories', icon: <AppstoreOutlined />, label: '分类' },
+  { key: 'snake', icon: <RocketOutlined />, label: '贪吃蛇' },
 ]
 
 function App(): JSX.Element {
@@ -44,6 +47,8 @@ function App(): JSX.Element {
         return <Statistics />
       case 'categories':
         return <CategoryManagement />
+      case 'snake':
+        return <SnakeGame />
       default:
         return <RecordExpense />
     }

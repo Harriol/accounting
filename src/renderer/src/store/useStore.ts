@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Expense, ExpenseInput, Income, IncomeInput, CustomCategory, CustomCategoryInput, UnifiedRecord, DailyTotal } from '../../../preload/index'
 
-export type PageKey = 'record' | 'list' | 'statistics' | 'categories'
+export type PageKey = 'record' | 'list' | 'statistics' | 'categories' | 'snake'
 
 interface AppState {
   // Navigation
