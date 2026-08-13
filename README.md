@@ -14,9 +14,10 @@
 
 ### Windows
 
-[![下载安装包](https://img.shields.io/badge/⬇️%20下载-里奥记账%20Windows%20安装包-orange)](https://github.com/Harriol/accounting/releases/latest)
+[![下载安装包](https://img.shields.io/badge/⬇️%20下载-里奥记账%20Windows%20安装包-orange)](https://github.com/Harriol/accounting/releases/latest/download/%E9%87%8C%E5%A5%A5%E8%AE%B0%E8%B4%A6-Setup-1.0.0.exe)
 
-点击上方按钮或访问 [Releases 页面](https://github.com/Harriol/accounting/releases)，下载 `里奥记账-Setup-*.exe`，双击运行并按提示完成安装即可。
+- 📦 **直接下载**：[里奥记账-Setup-1.0.0.exe](https://github.com/Harriol/accounting/releases/latest/download/%E9%87%8C%E5%A5%A5%E8%AE%B0%E8%B4%A6-Setup-1.0.0.exe)
+
 
 > 📌 数据 100% 本地存储（SQLite），无需联网，不采集任何用户数据。
 
