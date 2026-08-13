@@ -10,6 +10,29 @@
 
 ---
 
+## 📥 下载安装
+
+### Windows
+
+[![下载安装包](https://img.shields.io/badge/⬇️%20下载-里奥记账%20Windows%20安装包-orange)](https://github.com/Harriol/accounting/releases/latest)
+
+点击上方按钮或访问 [Releases 页面](https://github.com/Harriol/accounting/releases)，下载 `里奥记账-Setup-*.exe`，双击运行并按提示完成安装即可。
+
+> 📌 数据 100% 本地存储（SQLite），无需联网，不采集任何用户数据。
+
+### macOS / Linux
+
+暂未提供预编译包，可通过源码自行打包：
+
+```bash
+npm install
+npm run package:mac   # macOS
+# 或
+npm run package:all   # 全平台
+```
+
+---
+
 ## 📸 界面预览
 
 | 记一笔 | 账本 | 统计 | 分类管理 |
