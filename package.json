@@ -10,6 +10,11 @@
     "dev": "node scripts/dev.cjs",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "package:win": "electron-vite build && electron-builder --win",
     "package:mac": "electron-vite build && electron-builder --mac",
     "package:all": "electron-vite build && electron-builder --win --mac"
@@ -27,17 +32,25 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.4",
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "electron": "^31.7.7",
     "electron-builder": "^24.13.0",
     "electron-vite": "^5.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-ali": "^16.6.0",
+    "jsdom": "^30.0.1",
     "png-to-ico": "^3.0.2",
     "sharp": "^0.35.3",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.10"
   }
 }

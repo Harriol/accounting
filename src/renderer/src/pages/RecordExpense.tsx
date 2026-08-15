@@ -1,4 +1,7 @@
-import { useState, useMemo } from 'react'
+/**
+ * @author Harriol
+ */
+import { useState, useMemo } from 'react';
 import {
   Card,
   Form,
@@ -8,76 +11,76 @@ import {
   Button,
   message,
   Segmented,
-} from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
-import dayjs, { Dayjs } from 'dayjs'
-import { mergeCategories } from '../data/categories'
-import { mergeIncomeCategories } from '../data/incomeCategories'
-import { useStore } from '../store/useStore'
+} from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import dayjs, { Dayjs } from 'dayjs';
+import { mergeCategories } from '../data/categories';
+import { mergeIncomeCategories } from '../data/incomeCategories';
+import { useStore } from '../store/useStore';
 
 function RecordExpense(): JSX.Element {
-  const [form] = Form.useForm()
-  const [selectedL1, setSelectedL1] = useState<string | null>(null)
-  const [selectedL2, setSelectedL2] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [form] = Form.useForm();
+  const [selectedL1, setSelectedL1] = useState<string | null>(null);
+  const [selectedL2, setSelectedL2] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const addExpense = useStore(s => s.addExpense)
-  const addIncome = useStore(s => s.addIncome)
-  const customCategories = useStore(s => s.customCategories)
-  const currentMode = useStore(s => s.currentMode)
-  const setMode = useStore(s => s.setMode)
+  const addExpense = useStore((s) => s.addExpense);
+  const addIncome = useStore((s) => s.addIncome);
+  const customCategories = useStore((s) => s.customCategories);
+  const currentMode = useStore((s) => s.currentMode);
+  const setMode = useStore((s) => s.setMode);
 
   // Pick the right merger and categories based on mode
-  const isExpense = currentMode === 'expense'
+  const isExpense = currentMode === 'expense';
 
   // Filter custom categories by type
   const expenseCustomCategories = useMemo(
-    () => customCategories.filter(c => c.category_type !== 'income'),
-    [customCategories]
-  )
+    () => customCategories.filter((c) => c.category_type !== 'income'),
+    [customCategories],
+  );
   const incomeCustomCategories = useMemo(
-    () => customCategories.filter(c => c.category_type === 'income'),
-    [customCategories]
-  )
+    () => customCategories.filter((c) => c.category_type === 'income'),
+    [customCategories],
+  );
 
   // Merge preset + custom for display
   const mergedCategories = useMemo(
-    () => isExpense
+    () => (isExpense
       ? mergeCategories(expenseCustomCategories)
-      : mergeIncomeCategories(incomeCustomCategories),
-    [isExpense, expenseCustomCategories, incomeCustomCategories]
-  )
+      : mergeIncomeCategories(incomeCustomCategories)),
+    [isExpense, expenseCustomCategories, incomeCustomCategories],
+  );
 
   const handleL1Select = (value: string): void => {
-    setSelectedL1(value)
-    setSelectedL2(null)
-    form.setFieldsValue({ category_l1: value, category_l2: undefined })
-  }
+    setSelectedL1(value);
+    setSelectedL2(null);
+    form.setFieldsValue({ category_l1: value, category_l2: undefined });
+  };
 
   const handleL2Select = (value: string): void => {
-    setSelectedL2(value)
-    form.setFieldsValue({ category_l2: value })
-  }
+    setSelectedL2(value);
+    form.setFieldsValue({ category_l2: value });
+  };
 
   const handleModeChange = (val: string | number): void => {
-    setMode(val as 'expense' | 'income')
-    setSelectedL1(null)
-    setSelectedL2(null)
-    form.resetFields()
-    form.setFieldsValue({ date: dayjs() })
-  }
+    setMode(val as 'expense' | 'income');
+    setSelectedL1(null);
+    setSelectedL2(null);
+    form.resetFields();
+    form.setFieldsValue({ date: dayjs() });
+  };
 
   const handleSubmit = async (values: {
-    amount: number
-    date: Dayjs
-    note?: string
+    amount: number;
+    date: Dayjs;
+    note?: string;
   }): Promise<void> => {
     if (!selectedL1 || !selectedL2) {
-      message.warning(isExpense ? '请选择支出分类' : '请选择收入分类')
-      return
+      message.warning(isExpense ? '请选择支出分类' : '请选择收入分类');
+      return;
     }
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
       const data = {
         amount: values.amount,
@@ -85,36 +88,36 @@ function RecordExpense(): JSX.Element {
         category_l2: selectedL2,
         date: values.date.format('YYYY-MM-DD'),
         note: values.note || '',
-      }
+      };
       if (isExpense) {
-        await addExpense(data)
-        message.success('记账成功！')
+        await addExpense(data);
+        message.success('记账成功！');
       } else {
-        await addIncome(data)
-        message.success('收入记录成功！')
+        await addIncome(data);
+        message.success('收入记录成功！');
       }
 
-      form.resetFields()
-      form.setFieldsValue({ date: dayjs() })
-      setSelectedL1(null)
-      setSelectedL2(null)
+      form.resetFields();
+      form.setFieldsValue({ date: dayjs() });
+      setSelectedL1(null);
+      setSelectedL2(null);
     } catch (err) {
-      message.error(isExpense ? '记账失败，请重试' : '收入记录失败，请重试')
-      console.error(err)
+      message.error(isExpense ? '记账失败，请重试' : '收入记录失败，请重试');
+      console.error(err);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const subCategories = useMemo(() => {
-    if (!selectedL1) return []
-    const cat = mergedCategories.find(c => c.value === selectedL1)
-    return cat?.children || []
-  }, [selectedL1, mergedCategories])
+    if (!selectedL1) return [];
+    const cat = mergedCategories.find((c) => c.value === selectedL1);
+    return cat?.children || [];
+  }, [selectedL1, mergedCategories]);
 
-  const selectedCategory = mergedCategories.find(c => c.value === selectedL1)
-  const pageTitle = isExpense ? '记一笔' : '记收入'
-  const amountColor = isExpense ? '#ff4d4f' : '#52c41a'
+  const selectedCategory = mergedCategories.find((c) => c.value === selectedL1);
+  const pageTitle = isExpense ? '记一笔' : '记收入';
+  const amountColor = isExpense ? '#ff4d4f' : '#52c41a';
 
   return (
     <div className="record-page">
@@ -172,7 +175,7 @@ function RecordExpense(): JSX.Element {
             <div style={{ marginBottom: 12 }}>
               <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>一级分类</div>
               <div className="category-grid">
-                {mergedCategories.map(cat => (
+                {mergedCategories.map((cat) => (
                   <div
                     key={cat.value}
                     className={`category-tag ${selectedL1 === cat.value ? 'active' : ''}`}
@@ -195,7 +198,7 @@ function RecordExpense(): JSX.Element {
                   )}
                 </div>
                 <div className="category-grid">
-                  {subCategories.map(sub => (
+                  {subCategories.map((sub) => (
                     <div
                       key={sub.value}
                       className={`category-tag ${selectedL2 === sub.value ? 'active' : ''}`}
@@ -241,7 +244,7 @@ function RecordExpense(): JSX.Element {
         </Form>
       </Card>
     </div>
-  )
+  );
 }
 
-export default RecordExpense
+export default RecordExpense;

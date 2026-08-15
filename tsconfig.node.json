@@ -12,5 +12,5 @@
     "outDir": "./out/main",
     "types": ["node"]
   },
-  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "electron.vite.config.ts"]
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/preload/**/*.d.ts", "electron.vite.config.ts", "vitest.config.ts"]
 }

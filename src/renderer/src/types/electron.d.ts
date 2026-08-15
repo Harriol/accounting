@@ -1,9 +1,12 @@
-import type { ElectronAPI } from '../../../preload/index'
+/**
+ * @author Harriol
+ */
+import type { ElectronAPI } from '../../../preload/index';
 
 declare global {
   interface Window {
-    api: ElectronAPI
+    api: ElectronAPI;
   }
 }
 
-export {}
+export {};

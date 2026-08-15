@@ -81,9 +81,8 @@ async function main() {
   fs.writeFileSync(path.join(RESOURCES, 'icon.png'), icon512);
 
   // Generate ICO for Windows
-  const icoInput = [256, 48, 32, 16].map(size =>
-    fs.readFileSync(path.join(RESOURCES, `icon-${size}.png`))
-  );
+  const icoInput = [256, 48, 32, 16].map((size) =>
+    fs.readFileSync(path.join(RESOURCES, `icon-${size}.png`)));
   const icoBuf = await pngToIco(icoInput);
   fs.writeFileSync(path.join(RESOURCES, 'icon.ico'), icoBuf);
   console.log('  icon.ico ✅');
@@ -91,4 +90,4 @@ async function main() {
   console.log('Done! Icons saved to resources/');
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((e) => { console.error(e); process.exit(1); });

@@ -1,4 +1,7 @@
-import { useEffect, useState, useMemo } from 'react'
+/**
+ * @author Harriol
+ */
+import { useEffect, useState, useMemo } from 'react';
 import {
   Card,
   Row,
@@ -12,15 +15,31 @@ import {
   Space,
   Progress,
   Tag,
-} from 'antd'
-import { Pie, Column } from '@ant-design/charts'
-import dayjs, { Dayjs } from 'dayjs'
-import { categories } from '../data/categories'
-import { incomeCategories } from '../data/incomeCategories'
-import { useStore } from '../store/useStore'
+} from 'antd';
+import { Pie, Column } from '@ant-design/charts';
+import dayjs, { Dayjs } from 'dayjs';
+import { categories } from '../data/categories';
+import { incomeCategories } from '../data/incomeCategories';
+import { useStore } from '../store/useStore';
+
+// 图表卡片的三态渲染：加载中 / 空数据 / 正常图表，消除嵌套三元
+function renderChartCard(
+  loading: boolean,
+  hasData: boolean,
+  emptyText: string,
+  chart: JSX.Element,
+): JSX.Element {
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>;
+  }
+  if (!hasData) {
+    return <Empty description={emptyText} style={{ padding: '40px 0' }} />;
+  }
+  return chart;
+}
 
 function Statistics(): JSX.Element {
-  const store = useStore()
+  const store = useStore();
   const {
     // Expense stats
     monthlySummary, monthlyTotals, monthlyCount,
@@ -37,120 +56,123 @@ function Statistics(): JSX.Element {
     fetchIncomeMonthlySummary, fetchIncomeMonthlyTotals, fetchIncomeMonthlyCount,
     fetchDailyTotals,
     setMode,
-  } = store
+  } = store;
 
-  const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs())
-  const isExpense = currentMode === 'expense'
-
-  useEffect(() => {
-    const year = selectedMonth.year()
-    const month = selectedMonth.month() + 1
-    if (isExpense) {
-      fetchMonthlySummary(year, month)
-      fetchMonthlyCount(year, month)
-    } else {
-      fetchIncomeMonthlySummary(year, month)
-      fetchIncomeMonthlyCount(year, month)
-    }
-    fetchDailyTotals(isExpense ? 'expense' : 'income', year, month)
-  }, [selectedMonth, isExpense])
+  const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs());
+  const isExpense = currentMode === 'expense';
 
   useEffect(() => {
+    const year = selectedMonth.year();
+    const month = selectedMonth.month() + 1;
     if (isExpense) {
-      fetchMonthlyTotals(12)
+      fetchMonthlySummary(year, month);
+      fetchMonthlyCount(year, month);
     } else {
-      fetchIncomeMonthlyTotals(12)
+      fetchIncomeMonthlySummary(year, month);
+      fetchIncomeMonthlyCount(year, month);
     }
-  }, [isExpense])
+    fetchDailyTotals(isExpense ? 'expense' : 'income', year, month);
+    // zustand action 引用稳定，无需纳入依赖数组
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth, isExpense]);
+
+  useEffect(() => {
+    if (isExpense) {
+      fetchMonthlyTotals(12);
+    } else {
+      fetchIncomeMonthlyTotals(12);
+    }
+    // zustand action 引用稳定，无需纳入依赖数组
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpense]);
 
   const handleMonthChange = (date: Dayjs | null): void => {
-    if (date) setSelectedMonth(date)
-  }
+    if (date) setSelectedMonth(date);
+  };
 
   const handleModeChange = (val: string | number): void => {
-    setMode(val as 'expense' | 'income')
-  }
+    setMode(val as 'expense' | 'income');
+  };
 
   // Mode-specific data
-  const summary = isExpense ? monthlySummary : incomeMonthlySummary
-  const totals = isExpense ? monthlyTotals : incomeMonthlyTotals
-  const count = isExpense ? monthlyCount : incomeMonthlyCount
-  const loading = isExpense ? statsLoading : incomeStatsLoading
-  const error = isExpense ? statsError : incomeStatsError
+  const summary = isExpense ? monthlySummary : incomeMonthlySummary;
+  const totals = isExpense ? monthlyTotals : incomeMonthlyTotals;
+  const count = isExpense ? monthlyCount : incomeMonthlyCount;
+  const loading = isExpense ? statsLoading : incomeStatsLoading;
+  const error = isExpense ? statsError : incomeStatsError;
 
   // Filter custom categories by type
   const customCats = useMemo(
-    () => customCategories.filter(c =>
-      isExpense ? c.category_type !== 'income' : c.category_type === 'income'
-    ),
-    [isExpense, customCategories]
-  )
+    () => customCategories.filter((c) =>
+      (isExpense ? c.category_type !== 'income' : c.category_type === 'income')),
+    [isExpense, customCategories],
+  );
 
   // Icon map
   const iconMap = useMemo(() => {
-    const map: Record<string, string> = {}
-    const cats = isExpense ? categories : incomeCategories
-    for (const c of cats) map[c.value] = c.icon
-    for (const c of customCats) map[c.value] = c.icon
-    return map
-  }, [isExpense, customCats])
+    const map: Record<string, string> = {};
+    const cats = isExpense ? categories : incomeCategories;
+    for (const c of cats) map[c.value] = c.icon;
+    for (const c of customCats) map[c.value] = c.icon;
+    return map;
+  }, [isExpense, customCats]);
 
   const monthTotal = useMemo(
     () => summary.reduce((sum, item) => sum + item.total, 0),
-    [summary]
-  )
+    [summary],
+  );
 
   const dailyAvg = useMemo(
-    () => monthTotal > 0 ? monthTotal / Math.max(1, selectedMonth.daysInMonth()) : 0,
-    [monthTotal, selectedMonth]
-  )
+    () => (monthTotal > 0 ? monthTotal / Math.max(1, selectedMonth.daysInMonth()) : 0),
+    [monthTotal, selectedMonth],
+  );
 
   // ============ Pie Chart Data ============
   const pieData = useMemo(
-    () => summary.map(item => ({
+    () => summary.map((item) => ({
       type: item.category_l1,
       value: item.total,
       icon: iconMap[item.category_l1] || '📌',
     })),
-    [summary, iconMap]
-  )
+    [summary, iconMap],
+  );
 
   // ============ 12-Month Trend Data ============
   const barData = useMemo(
-    () => [...totals].reverse().map(item => ({
+    () => [...totals].reverse().map((item) => ({
       month: item.month,
       amount: item.total,
     })),
-    [totals]
-  )
+    [totals],
+  );
 
   // ============ Daily Comparison Data ============
   const dailyData = useMemo(() => {
-    const year = selectedMonth.year()
-    const month = selectedMonth.month() + 1
-    const daysInMonth = selectedMonth.daysInMonth()
+    const year = selectedMonth.year();
+    const month = selectedMonth.month() + 1;
+    const daysInMonth = selectedMonth.daysInMonth();
 
     // Build a map of date -> total
-    const totalMap: Record<string, number> = {}
+    const totalMap: Record<string, number> = {};
     for (const d of dailyTotals) {
-      totalMap[d.date] = d.total
+      totalMap[d.date] = d.total;
     }
 
     // Pad all days of the month
-    const result: { day: string; amount: number }[] = []
+    const result: Array<{ day: string; amount: number }> = [];
     for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       result.push({
         day: `${d}日`,
         amount: totalMap[dateStr] || 0,
-      })
+      });
     }
-    return result
-  }, [dailyTotals, selectedMonth])
+    return result;
+  }, [dailyTotals, selectedMonth]);
 
-  const hasPieData = pieData.length > 0
-  const hasBarData = barData.length > 0
-  const hasDailyData = dailyData.some(d => d.amount > 0)
+  const hasPieData = pieData.length > 0;
+  const hasBarData = barData.length > 0;
+  const hasDailyData = dailyData.some((d) => d.amount > 0);
 
   // ============ Chart Configs ============
 
@@ -167,7 +189,7 @@ function Statistics(): JSX.Element {
         layout: { justifyContent: 'center' },
       },
     },
-  }
+  };
 
   const barConfig = {
     data: barData,
@@ -184,7 +206,7 @@ function Statistics(): JSX.Element {
       },
     },
     color: isExpense ? '#1677ff' : '#52c41a',
-  }
+  };
 
   const dailyConfig = {
     data: dailyData,
@@ -197,23 +219,23 @@ function Statistics(): JSX.Element {
       },
     },
     color: isExpense ? '#ff7875' : '#73d13d',
-  }
+  };
 
   // ============ Ranking Data ============
   const rankingData = useMemo(
     () => [...summary].sort((a, b) => b.total - a.total),
-    [summary]
-  )
-  const rankMaxTotal = rankingData.length > 0 ? rankingData[0].total : 1
+    [summary],
+  );
+  const rankMaxTotal = rankingData.length > 0 ? rankingData[0].total : 1;
 
-  const amountColor = isExpense ? '#ff4d4f' : '#52c41a'
-  const amountTitle = isExpense ? '本月总支出' : '本月总收入'
-  const pieTitle = isExpense ? '📈 支出构成' : '📈 收入构成'
-  const barTitle = isExpense ? '📉 近12个月支出趋势' : '📉 近12个月收入趋势'
-  const dailyTitle = isExpense ? '📊 每日支出对比' : '📊 每日收入对比'
-  const rankTitle = isExpense ? '🏆 支出排行' : '🏆 收入排行'
-  const emptyPieText = isExpense ? '本月暂无支出记录' : '本月暂无收入记录'
-  const emptyBarText = isExpense ? '暂无支出记录' : '暂无收入记录'
+  const amountColor = isExpense ? '#ff4d4f' : '#52c41a';
+  const amountTitle = isExpense ? '本月总支出' : '本月总收入';
+  const pieTitle = isExpense ? '📈 支出构成' : '📈 收入构成';
+  const barTitle = isExpense ? '📉 近12个月支出趋势' : '📉 近12个月收入趋势';
+  const dailyTitle = isExpense ? '📊 每日支出对比' : '📊 每日收入对比';
+  const rankTitle = isExpense ? '🏆 支出排行' : '🏆 收入排行';
+  const emptyPieText = isExpense ? '本月暂无支出记录' : '本月暂无收入记录';
+  const emptyBarText = isExpense ? '暂无支出记录' : '暂无收入记录';
 
   return (
     <div className="statistics-page">
@@ -288,48 +310,41 @@ function Statistics(): JSX.Element {
 
       {/* Daily Comparison Chart */}
       <Card title={dailyTitle} style={{ marginBottom: 24 }}>
-        {dailyTotalsLoading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
-        ) : !hasDailyData ? (
-          <Empty description={emptyBarText} style={{ padding: '40px 0' }} />
-        ) : (
+        {renderChartCard(dailyTotalsLoading, hasDailyData, emptyBarText, (
           <div style={{ height: 300 }}>
             <Column {...dailyConfig} />
           </div>
-        )}
+        ))}
       </Card>
 
       {/* Pie Chart — full width */}
       <Card title={pieTitle} style={{ marginBottom: 24 }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
-        ) : !hasPieData ? (
-          <Empty description={emptyPieText} style={{ padding: '40px 0' }} />
-        ) : (
+        {renderChartCard(loading, hasPieData, emptyPieText, (
           <div style={{ height: 400 }}>
             <Pie {...pieConfig} />
           </div>
-        )}
+        ))}
       </Card>
 
       {/* Ranking List */}
       <Card title={rankTitle} style={{ marginBottom: 24 }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
-        ) : rankingData.length === 0 ? (
-          <Empty description={emptyPieText} style={{ padding: '40px 0' }} />
-        ) : (
+        {renderChartCard(loading, rankingData.length > 0, emptyPieText, (
           <Row gutter={[16, 16]}>
             {rankingData.map((item, index) => {
-              const pct = rankMaxTotal > 0 ? (item.total / rankMaxTotal) * 100 : 0
-              const rankColors = ['#ff4d4f', '#ff7a45', '#ffa940', '#1677ff']
-              const rankColor = index < 3 ? rankColors[index] : '#999'
+              const pct = rankMaxTotal > 0 ? (item.total / rankMaxTotal) * 100 : 0;
+              const rankColors = ['#ff4d4f', '#ff7a45', '#ffa940', '#1677ff'];
+              const rankColor = index < 3 ? rankColors[index] : '#999';
+              // 前 3 名 Tag 颜色：支出红 / 收入绿，其余默认
+              let tagColor = 'default';
+              if (index < 3) {
+                tagColor = isExpense ? 'red' : 'green';
+              }
               return (
                 <Col xs={24} sm={12} md={8} key={item.category_l1}>
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <Space size={8}>
-                        <Tag color={index < 3 ? (isExpense ? 'red' : 'green') : 'default'} style={{ borderRadius: 10, minWidth: 28, textAlign: 'center' }}>
+                        <Tag color={tagColor} style={{ borderRadius: 10, minWidth: 28, textAlign: 'center' }}>
                           {index + 1}
                         </Tag>
                         <span style={{ fontSize: 14 }}>
@@ -349,26 +364,22 @@ function Statistics(): JSX.Element {
                     />
                   </div>
                 </Col>
-              )
+              );
             })}
           </Row>
-        )}
+        ))}
       </Card>
 
       {/* 12-Month Trend */}
       <Card title={barTitle}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
-        ) : !hasBarData ? (
-          <Empty description={emptyBarText} style={{ padding: '40px 0' }} />
-        ) : (
+        {renderChartCard(loading, hasBarData, emptyBarText, (
           <div style={{ height: 340 }}>
             <Column {...barConfig} />
           </div>
-        )}
+        ))}
       </Card>
     </div>
-  )
+  );
 }
 
-export default Statistics
+export default Statistics;

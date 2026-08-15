@@ -193,6 +193,8 @@
 | 2026-08-05 | UI 组件库 | Ant Design 5 | 中文支持好，表格/表单/日期选择器开箱即用 |
 | 2026-08-05 | 状态管理 | Zustand | 轻量(<2KB)，API 简洁，适合中小应用 |
 | 2026-08-05 | 图表库 | @ant-design/charts | 与 Ant Design 5 深度集成，基于 G2 |
+| 2026-08-15 | 测试框架 | Vitest + @testing-library/react + jsdom + @vitest/coverage-v8 | 与 electron-vite 同源，复用 Vite 配置，组件测试与覆盖率开箱即用 |
+| 2026-08-15 | 代码审查 | ESLint 9 + eslint-config-ali + inline header 规则 | 阿里巴巴前端规约官方配置，强制文件头作者名 Harriol（eslint-plugin-header 与 ESLint 9 不兼容，改用官方 inline 规则） |
 
 ---
 
@@ -205,16 +207,26 @@
 - **UI 库**: Ant Design 5
 - **状态管理**: Zustand
 - **打包**: electron-builder（electron-vite 内置）
+- **测试**: Vitest + @testing-library/react（单元测试与组件测试，jsdom 环境）
+- **代码审查**: ESLint 9 + eslint-config-ali（阿里巴巴前端规约）+ inline header 规则（文件头作者名）
 
 ---
 
-## 项目结构（待技术栈选定后初始化）
+## 项目结构
 
 ```
 里奥记账APP/
 ├── CLAUDE.md              ← 本文档
 ├── README.md
+├── vitest.config.ts        ← 单元测试配置（Vitest）
+├── tests/                  ← 单元测试（不纳入 git 版本控制）
+│   ├── setup.ts
+│   └── data/ store/ pages/ main/
 ├── src/                    ← 源代码
+│   ├── main/
+│   │   └── db/queries.ts   ← 主进程查询构建纯函数
+│   ├── preload/            ← 预加载脚本
+│   └── renderer/           ← 渲染进程（React）
 ├── assets/                 ← 静态资源
 ├── docs/                   ← 设计文档
 └── scripts/                ← 构建脚本

@@ -1,20 +1,23 @@
-import { useEffect } from 'react'
-import { Layout, Menu } from 'antd'
+/**
+ * @author Harriol
+ */
+import { useEffect } from 'react';
+import { Layout, Menu } from 'antd';
 import {
   PlusOutlined,
   UnorderedListOutlined,
   PieChartOutlined,
   AppstoreOutlined,
   RocketOutlined,
-} from '@ant-design/icons'
-import RecordExpense from './pages/RecordExpense'
-import ExpenseList from './pages/ExpenseList'
-import Statistics from './pages/Statistics'
-import CategoryManagement from './pages/CategoryManagement'
-import SnakeGame from './pages/SnakeGame'
-import { useStore, PageKey } from './store/useStore'
+} from '@ant-design/icons';
+import RecordExpense from './pages/RecordExpense';
+import ExpenseList from './pages/ExpenseList';
+import Statistics from './pages/Statistics';
+import CategoryManagement from './pages/CategoryManagement';
+import SnakeGame from './pages/SnakeGame';
+import { useStore, PageKey } from './store/useStore';
 
-const { Sider, Content } = Layout
+const { Sider, Content } = Layout;
 
 const menuItems = [
   { key: 'record', icon: <PlusOutlined />, label: '记一笔' },
@@ -22,37 +25,39 @@ const menuItems = [
   { key: 'statistics', icon: <PieChartOutlined />, label: '统计' },
   { key: 'categories', icon: <AppstoreOutlined />, label: '分类' },
   { key: 'snake', icon: <RocketOutlined />, label: '贪吃蛇' },
-]
+];
 
 function App(): JSX.Element {
-  const currentPage = useStore(s => s.currentPage)
-  const navigateTo = useStore(s => s.navigateTo)
-  const fetchExpenses = useStore(s => s.fetchExpenses)
-  const fetchRecords = useStore(s => s.fetchRecords)
-  const fetchCategories = useStore(s => s.fetchCategories)
+  const currentPage = useStore((s) => s.currentPage);
+  const navigateTo = useStore((s) => s.navigateTo);
+  const fetchExpenses = useStore((s) => s.fetchExpenses);
+  const fetchRecords = useStore((s) => s.fetchRecords);
+  const fetchCategories = useStore((s) => s.fetchCategories);
 
   useEffect(() => {
-    fetchExpenses()
-    fetchRecords()
-    fetchCategories()
-  }, [])
+    fetchExpenses();
+    fetchRecords();
+    fetchCategories();
+    // zustand action 引用稳定，仅在挂载时初始化一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const renderPage = (): JSX.Element => {
     switch (currentPage) {
       case 'record':
-        return <RecordExpense />
+        return <RecordExpense />;
       case 'list':
-        return <ExpenseList />
+        return <ExpenseList />;
       case 'statistics':
-        return <Statistics />
+        return <Statistics />;
       case 'categories':
-        return <CategoryManagement />
+        return <CategoryManagement />;
       case 'snake':
-        return <SnakeGame />
+        return <SnakeGame />;
       default:
-        return <RecordExpense />
+        return <RecordExpense />;
     }
-  }
+  };
 
   return (
     <Layout style={{ height: '100vh', flexDirection: 'row' }}>
@@ -91,7 +96,7 @@ function App(): JSX.Element {
 
       {/* Mobile bottom navigation */}
       <div className="mobile-bottom-nav">
-        {menuItems.map(item => (
+        {menuItems.map((item) => (
           <div
             key={item.key}
             onClick={() => navigateTo(item.key as PageKey)}
@@ -160,9 +165,10 @@ function App(): JSX.Element {
             display: flex !important;
           }
         }
-      `}</style>
+      `}
+      </style>
     </Layout>
-  )
+  );
 }
 
-export default App
+export default App;
