@@ -52,7 +52,7 @@ function ExpenseList(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Separate custom categories by type for icon lookups
+  // 按类型拆分自定义分类，用于图标查找
   const expenseCustomCats = useMemo(
     () => customCategories.filter((c) => c.category_type !== 'income'),
     [customCategories],
@@ -62,7 +62,7 @@ function ExpenseList(): JSX.Element {
     [customCategories],
   );
 
-  // Build icon map covering both expense and income categories
+  // 构建覆盖支出与收入的图标映射
   const iconMap = useMemo(() => {
     const map: Record<string, string> = {};
     for (const c of categories) map[c.value] = c.icon;
@@ -72,7 +72,7 @@ function ExpenseList(): JSX.Element {
     return map;
   }, [expenseCustomCats, incomeCustomCats]);
 
-  // Build merged L1 category options for filter dropdown
+  // 构建筛选用的一级分类选项
   const categoryOptions = useMemo(() => {
     const seen = new Set<string>();
     const options: Array<{ label: string; value: string }> = [];
@@ -97,7 +97,7 @@ function ExpenseList(): JSX.Element {
     return options;
   }, [customCategories]);
 
-  // Summary calculations
+  // 汇总计算（支出 / 收入合计）
   const expenseTotal = useMemo(
     () => records
       .filter((r) => r.record_type === 'expense')
@@ -111,7 +111,7 @@ function ExpenseList(): JSX.Element {
     [records],
   );
 
-  // Date granularity options
+  // 日期粒度选项
   const datePresetOptions = [
     { label: '全部时间', value: 'all' },
     { label: '按年', value: 'year' },
@@ -119,7 +119,7 @@ function ExpenseList(): JSX.Element {
     { label: '按日', value: 'day' },
   ];
 
-  // DatePicker value based on current state
+  // 根据当前筛选状态计算 DatePicker 的值
   const datePickerValue = useMemo(() => {
     if (listDatePreset === 'year' && listYear) return dayjs().year(listYear);
     if (listDatePreset === 'month' && listYear && listMonth) return dayjs().year(listYear).month(listMonth - 1);

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Card, Button, Space, Statistic } from 'antd';
 import { PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, TrophyOutlined } from '@ant-design/icons';
 
-// ============ Game Constants ============
+// ============ 游戏常量 ============
 const GRID_SIZE = 20;
 const CELL_SIZE = 25;
 const CANVAS_SIZE = GRID_SIZE * CELL_SIZE;
@@ -13,7 +13,7 @@ const INITIAL_SPEED = 150;
 const SPEED_INCREASE = 5;
 const MIN_SPEED = 60;
 
-// ============ Types ============
+// ============ 类型定义 ============
 interface Point { x: number; y: number }
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type GameStatus = 'idle' | 'running' | 'paused' | 'over';
@@ -28,7 +28,7 @@ const OPPOSITE: Record<Direction, Direction> = {
   UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT',
 };
 
-// ============ Pure helpers ============
+// ============ 纯函数（可独立测试） ============
 export function createSnake(): Point[] {
   const mid = Math.floor(GRID_SIZE / 2);
   return [{ x: mid, y: mid }, { x: mid - 1, y: mid }, { x: mid - 2, y: mid }];
@@ -45,12 +45,12 @@ export function loadHighScore(): number {
   try { return Number(localStorage.getItem('snake_high_score')) || 0; } catch { return 0; }
 }
 
-// ============ Component ============
+// ============ 组件 ============
 function SnakeGame(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef(0);
 
-  // ---- Mutable game state (read by game loop, never triggers re-render) ----
+  // ---- 可变游戏状态（由游戏循环读取，不触发重渲染） ----
   const g = useRef({
     snake: createSnake(),
     food: randomFood(createSnake()),
@@ -62,14 +62,14 @@ function SnakeGame(): JSX.Element {
     lastTick: 0,
   });
 
-  // ---- React state (UI display only) ----
+  // ---- React 状态（仅用于 UI 展示） ----
   const [status, setStatus] = useState<GameStatus>('idle');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(loadHighScore);
   const highScoreRef = useRef(highScore);
-  highScoreRef.current = highScore; // always fresh for closures
+  highScoreRef.current = highScore; // 始终指向最新值，供闭包读取
 
-  // ---- Sync game → UI ----
+  // ---- 同步游戏状态到 UI ----
   function syncUI(s: GameStatus, sc: number) {
     g.current.status = s;
     g.current.score = sc;
@@ -77,7 +77,7 @@ function SnakeGame(): JSX.Element {
     setScore(sc);
   }
 
-  // ---- Shared init ----
+  // ---- 初始化（开始 / 重置共用） ----
   function initGame(initialStatus: GameStatus) {
     const snake = createSnake();
     g.current = {
@@ -94,7 +94,7 @@ function SnakeGame(): JSX.Element {
     setScore(0);
   }
 
-  // ---- Game over ----
+  // ---- 游戏结束 ----
   function triggerGameOver() {
     syncUI('over', g.current.score);
     if (g.current.score > highScoreRef.current) {
@@ -104,7 +104,7 @@ function SnakeGame(): JSX.Element {
     }
   }
 
-  // ---- Drawing ----
+  // ---- 绘制 ----
   function draw() {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -112,11 +112,11 @@ function SnakeGame(): JSX.Element {
     if (!ctx) return;
     const { snake, food, status: st } = g.current;
 
-    // Background
+    // 背景
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-    // Grid
+    // 网格线
     ctx.strokeStyle = '#16213e';
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= GRID_SIZE; i++) {
@@ -125,7 +125,7 @@ function SnakeGame(): JSX.Element {
       ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(CANVAS_SIZE, p); ctx.stroke();
     }
 
-    // Food
+    // 食物
     if (food) {
       const cx = food.x * CELL_SIZE + CELL_SIZE / 2;
       const cy = food.y * CELL_SIZE + CELL_SIZE / 2;
@@ -135,7 +135,7 @@ function SnakeGame(): JSX.Element {
       ctx.beginPath(); ctx.arc(cx, cy, CELL_SIZE / 2 - 2, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Snake
+    // 蛇身（从尾到头绘制，蛇头在最上层）
     for (let i = snake.length - 1; i >= 0; i--) {
       const seg = snake[i];
       const isHead = i === 0;
@@ -151,7 +151,7 @@ function SnakeGame(): JSX.Element {
       ctx.fill();
     }
 
-    // Overlays
+    // 遮罩层（待开始 / 暂停 / 结束提示）
     if (st === 'idle') drawOverlay('🐍 贪吃蛇', '点击「开始」或按 空格键');
     else if (st === 'paused') drawOverlay('⏸ 已暂停');
     else if (st === 'over') drawOverlay('游戏结束', `得分: ${g.current.score}`, '#ff4d4f');
@@ -173,7 +173,7 @@ function SnakeGame(): JSX.Element {
     }
   }
 
-  // ---- Game loop ----
+  // ---- 游戏逻辑（单步推进） ----
   function tick() {
     const dir = g.current.nextDirection;
     g.current.direction = dir;
@@ -181,13 +181,13 @@ function SnakeGame(): JSX.Element {
     const head = g.current.snake[0];
     const newHead: Point = { x: head.x + vec.x, y: head.y + vec.y };
 
-    // Wall collision
+    // 撞墙判定
     if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
       triggerGameOver();
       return;
     }
 
-    // Self collision (skip tail unless eating)
+    // 撞自身判定（吃到食物时尾巴会保留，否则忽略尾格）
     const willEat = g.current.food
       && newHead.x === g.current.food.x
       && newHead.y === g.current.food.y;
@@ -196,7 +196,7 @@ function SnakeGame(): JSX.Element {
       if (s.x === newHead.x && s.y === newHead.y) { triggerGameOver(); return; }
     }
 
-    // Move
+    // 前进一步：新蛇头入列，未吃到食物则弹出尾格
     g.current.snake = [newHead, ...g.current.snake];
     if (willEat) {
       g.current.score += 1;
@@ -219,7 +219,7 @@ function SnakeGame(): JSX.Element {
     animRef.current = requestAnimationFrame(gameLoop);
   }
 
-  // ---- Controls ----
+  // ---- 控制 ----
   function startGame() { initGame('running'); }
   function resetGame() { initGame('idle'); }
 
@@ -233,7 +233,7 @@ function SnakeGame(): JSX.Element {
     }
   }
 
-  // ---- Keyboard ----
+  // ---- 键盘监听 ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const keyMap: Record<string, Direction> = {
@@ -267,7 +267,7 @@ function SnakeGame(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Start loop ----
+  // ---- 启动渲染循环 ----
   useEffect(() => {
     animRef.current = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animRef.current);
@@ -275,7 +275,7 @@ function SnakeGame(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ============ Render ============
+  // ============ 渲染 ============
   return (
     <div className="snake-game-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>

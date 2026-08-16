@@ -47,10 +47,15 @@
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.5",
     "eslint-config-ali": "^16.6.0",
+    "eslint-plugin-security": "^4.0.1",
     "jsdom": "^30.0.1",
     "png-to-ico": "^3.0.2",
     "sharp": "^0.35.3",
     "typescript": "^5.5.0",
+    "vite": "^7.3.6",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "vite": "^7.3.6"
   }
 }

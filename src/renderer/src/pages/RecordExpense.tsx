@@ -30,10 +30,10 @@ function RecordExpense(): JSX.Element {
   const currentMode = useStore((s) => s.currentMode);
   const setMode = useStore((s) => s.setMode);
 
-  // Pick the right merger and categories based on mode
+  // 根据模式选择对应的合并函数与分类数据
   const isExpense = currentMode === 'expense';
 
-  // Filter custom categories by type
+  // 按类型筛选自定义分类
   const expenseCustomCategories = useMemo(
     () => customCategories.filter((c) => c.category_type !== 'income'),
     [customCategories],
@@ -43,7 +43,7 @@ function RecordExpense(): JSX.Element {
     [customCategories],
   );
 
-  // Merge preset + custom for display
+  // 合并预设与自定义分类用于展示
   const mergedCategories = useMemo(
     () => (isExpense
       ? mergeCategories(expenseCustomCategories)

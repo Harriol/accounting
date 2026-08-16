@@ -2,54 +2,54 @@
  * @author Harriol
  */
 import { create } from 'zustand';
-import type { Expense, ExpenseInput, Income, IncomeInput, CustomCategory, CustomCategoryInput, UnifiedRecord, DailyTotal } from '../../../preload/index';
+import type { Expense, ExpenseInput, Income, IncomeInput, CustomCategory, CustomCategoryInput, UnifiedRecord, DailyTotal, Mode } from '../../../preload/index';
 
 export type PageKey = 'record' | 'list' | 'statistics' | 'categories' | 'snake';
 
 interface AppState {
-  // Navigation
+  // 页面导航
   currentPage: PageKey;
   navigateTo: (page: PageKey) => void;
 
-  // Mode
-  currentMode: 'expense' | 'income';
-  setMode: (mode: 'expense' | 'income') => void;
+  // 记账模式（支出 / 收入）
+  currentMode: Mode;
+  setMode: (mode: Mode) => void;
 
-  // Expenses
+  // 支出数据
   expenses: Expense[];
   expensesLoading: boolean;
   expensesError: string | null;
 
-  // Incomes
+  // 收入数据
   incomes: Income[];
   incomesLoading: boolean;
   incomesError: string | null;
 
-  // Filters
+  // 支出筛选条件
   filterMonth: string | null;
   filterCategory: string | null;
   incomeFilterMonth: string | null;
   incomeFilterCategory: string | null;
 
-  // Expense Actions
+  // 支出操作
   fetchExpenses: () => Promise<void>;
   addExpense: (input: ExpenseInput) => Promise<Expense>;
   deleteExpense: (id: string) => Promise<boolean>;
   updateExpense: (input: ExpenseInput & { id: string }) => Promise<boolean>;
 
-  // Income Actions
+  // 收入操作
   fetchIncomes: () => Promise<void>;
   addIncome: (input: IncomeInput) => Promise<Income>;
   deleteIncome: (id: string) => Promise<boolean>;
   updateIncome: (input: IncomeInput & { id: string }) => Promise<boolean>;
 
-  // Filter actions
+  // 支出筛选操作
   setFilterMonth: (month: string | null) => void;
   setFilterCategory: (category: string | null) => void;
   setIncomeFilterMonth: (month: string | null) => void;
   setIncomeFilterCategory: (category: string | null) => void;
 
-  // Expense Statistics
+  // 支出统计
   monthlySummary: Array<{ category_l1: string; total: number }>;
   monthlyTotals: Array<{ month: string; total: number }>;
   monthlyCount: number;
@@ -59,7 +59,7 @@ interface AppState {
   fetchMonthlyTotals: (months?: number) => Promise<void>;
   fetchMonthlyCount: (year: number, month: number) => Promise<void>;
 
-  // Income Statistics
+  // 收入统计
   incomeMonthlySummary: Array<{ category_l1: string; total: number }>;
   incomeMonthlyTotals: Array<{ month: string; total: number }>;
   incomeMonthlyCount: number;
@@ -69,12 +69,12 @@ interface AppState {
   fetchIncomeMonthlyTotals: (months?: number) => Promise<void>;
   fetchIncomeMonthlyCount: (year: number, month: number) => Promise<void>;
 
-  // Daily totals (for daily comparison chart)
+  // 每日汇总（每日对比图用）
   dailyTotals: DailyTotal[];
   dailyTotalsLoading: boolean;
-  fetchDailyTotals: (type: 'expense' | 'income', year: number, month: number) => Promise<void>;
+  fetchDailyTotals: (type: Mode, year: number, month: number) => Promise<void>;
 
-  // Categories
+  // 分类
   customCategories: CustomCategory[];
   categoriesLoading: boolean;
   fetchCategories: (categoryType?: string) => Promise<void>;
@@ -86,7 +86,7 @@ interface AppState {
   }) => Promise<{ success: boolean; error?: string }>;
   deleteCategory: (id: string) => Promise<{ success: boolean; error?: string }>;
 
-  // Unified records (账本 — merged expenses + incomes)
+  // 统一账本（支出 + 收入合并）
   records: UnifiedRecord[];
   recordsLoading: boolean;
   recordsError: string | null;
@@ -109,8 +109,8 @@ export const useStore = create<AppState>((set, get) => ({
   currentPage: 'record' as PageKey,
   navigateTo: (page: PageKey) => set({ currentPage: page }),
 
-  currentMode: 'expense' as 'expense' | 'income',
-  setMode: (mode: 'expense' | 'income') => set({ currentMode: mode }),
+  currentMode: 'expense' as Mode,
+  setMode: (mode: Mode) => set({ currentMode: mode }),
 
   expenses: [],
   expensesLoading: false,
@@ -142,7 +142,7 @@ export const useStore = create<AppState>((set, get) => ({
   customCategories: [],
   categoriesLoading: false,
 
-  // Unified records initial state
+  // 统一账本初始状态
   records: [],
   recordsLoading: false,
   recordsError: null,
@@ -219,7 +219,7 @@ export const useStore = create<AppState>((set, get) => ({
     get().fetchExpenses();
   },
 
-  // Income CRUD
+  // 收入增删改查
   fetchIncomes: async () => {
     set({ incomesLoading: true, incomesError: null });
     try {
@@ -276,7 +276,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  // Income filter actions
+  // 收入筛选操作
   setIncomeFilterMonth: (month: string | null) => {
     set({ incomeFilterMonth: month });
     get().fetchIncomes();
@@ -318,7 +318,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  // Income statistics
+  // 收入统计
   fetchIncomeMonthlySummary: async (year: number, month: number) => {
     set({ incomeStatsLoading: true, incomeStatsError: null });
     try {
@@ -350,7 +350,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  fetchDailyTotals: async (type: 'expense' | 'income', year: number, month: number) => {
+  fetchDailyTotals: async (type: Mode, year: number, month: number) => {
     set({ dailyTotalsLoading: true });
     try {
       const totals = await window.api.getDailyTotals({ type, year, month });
@@ -396,40 +396,43 @@ export const useStore = create<AppState>((set, get) => ({
     return result;
   },
 
-  // Unified records actions
+  // 统一账本操作
   fetchRecords: async () => {
     set({ recordsLoading: true, recordsError: null });
     try {
       const { listType, listCategory, listDatePreset, listYear, listMonth, listDay } = get();
       const filters: {
-        type?: 'expense' | 'income';
+        type?: Mode;
         category_l1?: string;
         startDate?: string;
         endDate?: string;
       } = {};
 
-      // Type filter
+      // 类型筛选
       if (listType !== 'all') {
         filters.type = listType;
       }
 
-      // Category filter
+      // 分类筛选
       if (listCategory) {
         filters.category_l1 = listCategory;
       }
 
-      // Date filter based on preset
+      // 按日期预设（年/月/日）换算为起止日期区间
       if (listDatePreset === 'year' && listYear) {
+        // 按年：当年 1 月 1 日 至 12 月 31 日
         const y = String(listYear);
         filters.startDate = `${y}-01-01`;
         filters.endDate = `${y}-12-31`;
       } else if (listDatePreset === 'month' && listYear && listMonth) {
+        // 按月：当月 1 日 至 月末；new Date(y, m, 0) 会回退到上月最后一天，取其日期即当月天数
         const y = String(listYear);
         const m = String(listMonth).padStart(2, '0');
         const lastDay = new Date(listYear, listMonth, 0).getDate();
         filters.startDate = `${y}-${m}-01`;
         filters.endDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
       } else if (listDatePreset === 'day' && listYear && listMonth && listDay) {
+        // 按日：起止均为当天
         const y = String(listYear);
         const m = String(listMonth).padStart(2, '0');
         const d = String(listDay).padStart(2, '0');

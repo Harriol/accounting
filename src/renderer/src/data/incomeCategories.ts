@@ -82,7 +82,7 @@ export const incomeCategories: Category[] = [
   },
 ];
 
-/** Merge preset income categories with user-created custom income categories */
+/** 合并预设收入分类与用户自定义收入分类 */
 export function mergeIncomeCategories(
   customCategories: Array<{
     id: string;
@@ -93,13 +93,13 @@ export function mergeIncomeCategories(
     is_preset: number;
   }>,
 ): Category[] {
-  // Deep clone the preset categories
+  // 深拷贝预设分类，避免修改原数组
   const merged: Category[] = incomeCategories.map((cat) => ({
     ...cat,
     children: [...cat.children],
   }));
 
-  // Group custom categories by parent
+  // 按父分类对自定义分类分组：一级归 customL1，二级按 parent_value 归 customL2ByParent
   const customL1: typeof customCategories = [];
   const customL2ByParent: Record<string, SubCategory[]> = {};
 
@@ -117,7 +117,7 @@ export function mergeIncomeCategories(
     }
   }
 
-  // Append custom L2 subcategories to their parent L1
+  // 将自定义二级分类追加到对应的一级分类下
   for (const cat of merged) {
     const customChildren = customL2ByParent[cat.value];
     if (customChildren) {
@@ -125,7 +125,7 @@ export function mergeIncomeCategories(
     }
   }
 
-  // Add custom L1 categories
+  // 补充带二级子分类的自定义一级分类
   for (const l1 of customL1) {
     const children = customL2ByParent[l1.value] || [];
     merged.push({

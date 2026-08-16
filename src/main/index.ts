@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { monthPrefix, buildListQuery, buildRecordQuery } from './db/queries';
 
-// ============ Database Setup ============
+// ============ 数据库初始化 ============
 let db: Database.Database;
 
 function initDatabase(): void {
@@ -15,10 +15,10 @@ function initDatabase(): void {
   const dbPath = join(userDataPath, 'leo-accounting.db');
   db = new Database(dbPath);
 
-  // Enable WAL mode for better performance
+  // 开启 WAL 模式，提升并发读写性能
   db.pragma('journal_mode = WAL');
 
-  // Create tables
+  // 支出表
   db.exec(`
     CREATE TABLE IF NOT EXISTS expenses (
       id TEXT PRIMARY KEY,
@@ -31,13 +31,13 @@ function initDatabase(): void {
     )
   `);
 
-  // Create indexes
+  // 支出表索引（按日期 / 分类查询）
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
     CREATE INDEX IF NOT EXISTS idx_expenses_category_l1 ON expenses(category_l1);
   `);
 
-  // Custom categories table (user-created categories)
+  // 自定义分类表（用户自建分类）
   db.exec(`
     CREATE TABLE IF NOT EXISTS custom_categories (
       id TEXT PRIMARY KEY,
@@ -55,14 +55,14 @@ function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_custom_categories_parent ON custom_categories(parent_value);
   `);
 
-  // Add category_type column for existing databases (expense/income distinction)
+  // 为旧数据库补充 category_type 列（区分支出/收入）
   try {
     db.exec('ALTER TABLE custom_categories ADD COLUMN category_type TEXT DEFAULT \'expense\'');
   } catch {
-    // Column already exists, ignore
+    // 列已存在则忽略
   }
 
-  // Incomes table
+  // 收入表（结构与支出表一致）
   db.exec(`
     CREATE TABLE IF NOT EXISTS incomes (
       id TEXT PRIMARY KEY,
@@ -81,251 +81,131 @@ function initDatabase(): void {
   `);
 }
 
-// ============ IPC Handlers ============
+// ============ IPC 处理器 ============
+
+// 单条记录的新增 / 更新入参（支出 / 收入共用）
+interface RecordInput {
+  amount: number;
+  category_l1: string;
+  category_l2: string;
+  date: string;
+  note?: string;
+}
+
+// 为支出 / 收入表注册结构完全一致的一组 CRUD + 统计 handler，消除重复代码
+function registerRecordHandlers(prefix: 'expense' | 'income', table: 'expenses' | 'incomes'): void {
+  // 新增记录
+  ipcMain.handle(`${prefix}:add`, (_event, input: RecordInput) => {
+    try {
+      const id = uuidv4();
+      const createdAt = new Date().toISOString();
+      const stmt = db.prepare(
+        `INSERT INTO ${table} (id, amount, category_l1, category_l2, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      stmt.run(id, input.amount, input.category_l1, input.category_l2, input.date, input.note || '', createdAt);
+      return { id, ...input, note: input.note || '', created_at: createdAt };
+    } catch (err) {
+      console.error(`${prefix}:add error:`, err);
+      throw new Error(`Failed to add ${prefix}`);
+    }
+  });
+
+  // 查询全部（按日期 / 分类筛选）
+  ipcMain.handle(`${prefix}:getAll`, (_event, filters?: {
+    startDate?: string;
+    endDate?: string;
+    category_l1?: string;
+  }) => {
+    try {
+      const { query, params } = buildListQuery(table, filters);
+      return db.prepare(query).all(...params);
+    } catch (err) {
+      console.error(`${prefix}:getAll error:`, err);
+      return [];
+    }
+  });
+
+  // 当月笔数（统计用，忽略筛选）
+  ipcMain.handle(`${prefix}:getMonthlyCount`, (_event, year: number, month: number) => {
+    try {
+      const prefixStr = monthPrefix(year, month);
+      const row = db.prepare(
+        `SELECT COUNT(*) as count FROM ${table} WHERE date LIKE ?`,
+      ).get(`${prefixStr}%`) as { count: number };
+      return row.count;
+    } catch (err) {
+      console.error(`${prefix}:getMonthlyCount error:`, err);
+      return 0;
+    }
+  });
+
+  // 删除记录
+  ipcMain.handle(`${prefix}:delete`, (_event, id: string) => {
+    try {
+      const result = db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+      return { success: result.changes > 0 };
+    } catch (err) {
+      console.error(`${prefix}:delete error:`, err);
+      return { success: false };
+    }
+  });
+
+  // 更新记录
+  ipcMain.handle(`${prefix}:update`, (_event, input: RecordInput & { id: string }) => {
+    try {
+      const stmt = db.prepare(
+        `UPDATE ${table} SET amount = ?, category_l1 = ?, category_l2 = ?, date = ?, note = ? WHERE id = ?`,
+      );
+      const result = stmt.run(input.amount, input.category_l1, input.category_l2, input.date, input.note || '', input.id);
+      return { success: result.changes > 0 };
+    } catch (err) {
+      console.error(`${prefix}:update error:`, err);
+      return { success: false };
+    }
+  });
+
+  // 当月分类汇总（统计饼图）
+  ipcMain.handle(`${prefix}:getMonthlySummary`, (_event, year: number, month: number) => {
+    try {
+      const prefixStr = monthPrefix(year, month);
+      return db.prepare(`
+        SELECT category_l1, SUM(amount) as total
+        FROM ${table}
+        WHERE date LIKE ?
+        GROUP BY category_l1
+        ORDER BY total DESC
+      `).all(`${prefixStr}%`);
+    } catch (err) {
+      console.error(`${prefix}:getMonthlySummary error:`, err);
+      return [];
+    }
+  });
+
+  // 近 N 月月度趋势（趋势图）
+  ipcMain.handle(`${prefix}:getMonthlyTotals`, (_event, months = 12) => {
+    try {
+      return db.prepare(`
+        SELECT substr(date, 1, 7) as month, SUM(amount) as total
+        FROM ${table}
+        GROUP BY month
+        ORDER BY month DESC
+        LIMIT ?
+      `).all(months);
+    } catch (err) {
+      console.error(`${prefix}:getMonthlyTotals error:`, err);
+      return [];
+    }
+  });
+}
+
 function setupIPC(): void {
-  // Add expense
-  ipcMain.handle('expense:add', (_event, expense: {
-    amount: number;
-    category_l1: string;
-    category_l2: string;
-    date: string;
-    note?: string;
-  }) => {
-    try {
-      const id = uuidv4();
-      const createdAt = new Date().toISOString();
-      const stmt = db.prepare(
-        'INSERT INTO expenses (id, amount, category_l1, category_l2, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      );
-      stmt.run(id, expense.amount, expense.category_l1, expense.category_l2, expense.date, expense.note || '', createdAt);
-      return { id, ...expense, note: expense.note || '', created_at: createdAt };
-    } catch (err) {
-      console.error('expense:add error:', err);
-      throw new Error('Failed to add expense');
-    }
-  });
+  // 支出与收入表结构一致，复用同一组 handler
+  registerRecordHandlers('expense', 'expenses');
+  registerRecordHandlers('income', 'incomes');
 
-  // Get all expenses
-  ipcMain.handle('expense:getAll', (_event, filters?: {
-    startDate?: string;
-    endDate?: string;
-    category_l1?: string;
-  }) => {
-    try {
-      const { query, params } = buildListQuery('expenses', filters);
-      return db.prepare(query).all(...params);
-    } catch (err) {
-      console.error('expense:getAll error:', err);
-      return [];
-    }
-  });
+  // ============ 统一账本（支出 + 收入合并） ============
 
-  // Get expense count for a specific month (unfiltered — for statistics)
-  ipcMain.handle('expense:getMonthlyCount', (_event, year: number, month: number) => {
-    try {
-      const prefix = monthPrefix(year, month);
-      const row = db.prepare(
-        'SELECT COUNT(*) as count FROM expenses WHERE date LIKE ?',
-      ).get(`${prefix}%`) as { count: number };
-      return row.count;
-    } catch (err) {
-      console.error('expense:getMonthlyCount error:', err);
-      return 0;
-    }
-  });
-
-  // Delete expense
-  ipcMain.handle('expense:delete', (_event, id: string) => {
-    try {
-      const stmt = db.prepare('DELETE FROM expenses WHERE id = ?');
-      const result = stmt.run(id);
-      return { success: result.changes > 0 };
-    } catch (err) {
-      console.error('expense:delete error:', err);
-      return { success: false };
-    }
-  });
-
-  // Update expense
-  ipcMain.handle('expense:update', (_event, expense: {
-    id: string;
-    amount: number;
-    category_l1: string;
-    category_l2: string;
-    date: string;
-    note?: string;
-  }) => {
-    try {
-      const stmt = db.prepare(
-        'UPDATE expenses SET amount = ?, category_l1 = ?, category_l2 = ?, date = ?, note = ? WHERE id = ?',
-      );
-      const result = stmt.run(expense.amount, expense.category_l1, expense.category_l2, expense.date, expense.note || '', expense.id);
-      return { success: result.changes > 0 };
-    } catch (err) {
-      console.error('expense:update error:', err);
-      return { success: false };
-    }
-  });
-
-  // Get monthly summary for statistics
-  ipcMain.handle('expense:getMonthlySummary', (_event, year: number, month: number) => {
-    try {
-      const prefix = monthPrefix(year, month);
-      const rows = db.prepare(`
-        SELECT category_l1, SUM(amount) as total
-        FROM expenses
-        WHERE date LIKE ?
-        GROUP BY category_l1
-        ORDER BY total DESC
-      `).all(`${prefix}%`);
-      return rows;
-    } catch (err) {
-      console.error('expense:getMonthlySummary error:', err);
-      return [];
-    }
-  });
-
-  // Get monthly totals for trend chart
-  ipcMain.handle('expense:getMonthlyTotals', (_event, months = 12) => {
-    try {
-      const rows = db.prepare(`
-        SELECT substr(date, 1, 7) as month, SUM(amount) as total
-        FROM expenses
-        GROUP BY month
-        ORDER BY month DESC
-        LIMIT ?
-      `).all(months);
-      return rows;
-    } catch (err) {
-      console.error('expense:getMonthlyTotals error:', err);
-      return [];
-    }
-  });
-
-  // ============ Income IPC Handlers ============
-
-  // Add income
-  ipcMain.handle('income:add', (_event, income: {
-    amount: number;
-    category_l1: string;
-    category_l2: string;
-    date: string;
-    note?: string;
-  }) => {
-    try {
-      const id = uuidv4();
-      const createdAt = new Date().toISOString();
-      const stmt = db.prepare(
-        'INSERT INTO incomes (id, amount, category_l1, category_l2, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      );
-      stmt.run(id, income.amount, income.category_l1, income.category_l2, income.date, income.note || '', createdAt);
-      return { id, ...income, note: income.note || '', created_at: createdAt };
-    } catch (err) {
-      console.error('income:add error:', err);
-      throw new Error('Failed to add income');
-    }
-  });
-
-  // Get all incomes
-  ipcMain.handle('income:getAll', (_event, filters?: {
-    startDate?: string;
-    endDate?: string;
-    category_l1?: string;
-  }) => {
-    try {
-      const { query, params } = buildListQuery('incomes', filters);
-      return db.prepare(query).all(...params);
-    } catch (err) {
-      console.error('income:getAll error:', err);
-      return [];
-    }
-  });
-
-  // Get income count for a specific month
-  ipcMain.handle('income:getMonthlyCount', (_event, year: number, month: number) => {
-    try {
-      const prefix = monthPrefix(year, month);
-      const row = db.prepare(
-        'SELECT COUNT(*) as count FROM incomes WHERE date LIKE ?',
-      ).get(`${prefix}%`) as { count: number };
-      return row.count;
-    } catch (err) {
-      console.error('income:getMonthlyCount error:', err);
-      return 0;
-    }
-  });
-
-  // Delete income
-  ipcMain.handle('income:delete', (_event, id: string) => {
-    try {
-      const stmt = db.prepare('DELETE FROM incomes WHERE id = ?');
-      const result = stmt.run(id);
-      return { success: result.changes > 0 };
-    } catch (err) {
-      console.error('income:delete error:', err);
-      return { success: false };
-    }
-  });
-
-  // Update income
-  ipcMain.handle('income:update', (_event, income: {
-    id: string;
-    amount: number;
-    category_l1: string;
-    category_l2: string;
-    date: string;
-    note?: string;
-  }) => {
-    try {
-      const stmt = db.prepare(
-        'UPDATE incomes SET amount = ?, category_l1 = ?, category_l2 = ?, date = ?, note = ? WHERE id = ?',
-      );
-      const result = stmt.run(income.amount, income.category_l1, income.category_l2, income.date, income.note || '', income.id);
-      return { success: result.changes > 0 };
-    } catch (err) {
-      console.error('income:update error:', err);
-      return { success: false };
-    }
-  });
-
-  // Get monthly income summary for statistics
-  ipcMain.handle('income:getMonthlySummary', (_event, year: number, month: number) => {
-    try {
-      const prefix = monthPrefix(year, month);
-      const rows = db.prepare(`
-        SELECT category_l1, SUM(amount) as total
-        FROM incomes
-        WHERE date LIKE ?
-        GROUP BY category_l1
-        ORDER BY total DESC
-      `).all(`${prefix}%`);
-      return rows;
-    } catch (err) {
-      console.error('income:getMonthlySummary error:', err);
-      return [];
-    }
-  });
-
-  // Get monthly income totals for trend chart
-  ipcMain.handle('income:getMonthlyTotals', (_event, months = 12) => {
-    try {
-      const rows = db.prepare(`
-        SELECT substr(date, 1, 7) as month, SUM(amount) as total
-        FROM incomes
-        GROUP BY month
-        ORDER BY month DESC
-        LIMIT ?
-      `).all(months);
-      return rows;
-    } catch (err) {
-      console.error('income:getMonthlyTotals error:', err);
-      return [];
-    }
-  });
-
-  // ============ Unified Records ============
-
-  // Get all records (expenses + incomes combined)
+  // 查询所有记录（支出 + 收入合并，按类型 / 分类 / 日期筛选）
   ipcMain.handle('record:getAll', (_event, filters?: {
     type?: 'expense' | 'income';
     category_l1?: string;
@@ -341,14 +221,15 @@ function setupIPC(): void {
     }
   });
 
-  // Get daily totals within a month (for daily comparison chart)
+  // 当月每日汇总（每日对比图）
   ipcMain.handle('record:getDailyTotals', (_event, params: {
     type: 'expense' | 'income';
     year: number;
     month: number;
   }) => {
     try {
-      const prefix = monthPrefix(params.year, params.month);
+      const prefixStr = monthPrefix(params.year, params.month);
+      // 表名仅由 type 的固定两值决定，无注入风险
       const table = params.type === 'expense' ? 'expenses' : 'incomes';
       const rows = db.prepare(`
         SELECT date, SUM(amount) as total
@@ -356,7 +237,7 @@ function setupIPC(): void {
         WHERE date LIKE ?
         GROUP BY date
         ORDER BY date ASC
-      `).all(`${prefix}%`);
+      `).all(`${prefixStr}%`);
       return rows;
     } catch (err) {
       console.error('record:getDailyTotals error:', err);
@@ -364,9 +245,9 @@ function setupIPC(): void {
     }
   });
 
-  // ============ Category IPC Handlers ============
+  // ============ 分类处理器 ============
 
-  // Get all custom categories (optionally filtered by category_type)
+  // 查询所有自定义分类（可选按 category_type 过滤）
   ipcMain.handle('category:getAll', (_event, categoryType?: string) => {
     try {
       if (categoryType) {
@@ -383,7 +264,7 @@ function setupIPC(): void {
     }
   });
 
-  // Add a custom category
+  // 新增自定义分类
   ipcMain.handle('category:add', (_event, input: {
     label: string;
     icon: string;
@@ -395,7 +276,7 @@ function setupIPC(): void {
       const value = `custom_${id.substring(0, 8)}`;
       const categoryType = input.category_type || 'expense';
 
-      // Check for duplicate name under the same parent and type
+      // 同一父级 + 同一类型下查重
       const existing = db.prepare(
         'SELECT id FROM custom_categories WHERE label = ? AND parent_value IS ? AND category_type = ?',
       ).get(input.label, input.parent_value, categoryType);
@@ -416,14 +297,14 @@ function setupIPC(): void {
     }
   });
 
-  // Update a custom category (name and/or icon)
+  // 更新自定义分类（名称 / 图标）
   ipcMain.handle('category:update', (_event, input: {
     id: string;
     label: string;
     icon: string;
   }) => {
     try {
-      // Only allow updating non-preset categories
+      // 预设分类不可修改
       const cat = db.prepare('SELECT * FROM custom_categories WHERE id = ?').get(input.id) as { is_preset: number } | undefined;
       if (!cat) {
         return { success: false, error: '分类不存在' };
@@ -441,7 +322,7 @@ function setupIPC(): void {
     }
   });
 
-  // Delete a custom category
+  // 删除自定义分类
   ipcMain.handle('category:delete', (_event, id: string) => {
     try {
       const cat = db.prepare('SELECT * FROM custom_categories WHERE id = ?').get(id) as { is_preset: number; parent_value: string | null } | undefined;
@@ -452,9 +333,8 @@ function setupIPC(): void {
         return { success: false, error: '预设分类不可删除' };
       }
 
-      // If it's a L1 category, cascade delete all its L2 children
+      // 一级分类级联删除其下所有二级子分类
       if (cat.parent_value === null) {
-        // Find the L1's value to identify its children
         const l1Cat = db.prepare('SELECT value FROM custom_categories WHERE id = ?').get(id) as { value: string };
         db.prepare('DELETE FROM custom_categories WHERE parent_value = ?').run(l1Cat.value);
       }
@@ -468,7 +348,7 @@ function setupIPC(): void {
   });
 }
 
-// ============ Window Creation ============
+// ============ 窗口创建 ============
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
@@ -487,13 +367,13 @@ function createWindow(): void {
     },
   });
 
-  // Open external links in system browser
+  // 外部链接交由系统默认浏览器打开
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: 'deny' };
   });
 
-  // Load the renderer
+  // 开发模式加载 dev server，生产模式加载本地文件
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
@@ -501,7 +381,7 @@ function createWindow(): void {
   }
 }
 
-// ============ App Lifecycle ============
+// ============ 应用生命周期 ============
 app.whenReady().then(() => {
   initDatabase();
   setupIPC();

@@ -39,6 +39,9 @@ export interface IncomeInput {
   note?: string;
 }
 
+// 记账模式：支出 / 收入（多文件共用，避免内联重复）
+export type Mode = 'expense' | 'income';
+
 export interface MonthlySummary {
   category_l1: string;
   total: number;
@@ -51,7 +54,7 @@ export interface MonthlyTotal {
 
 export interface UnifiedRecord {
   id: string;
-  record_type: 'expense' | 'income';
+  record_type: Mode;
   amount: number;
   category_l1: string;
   category_l2: string;
@@ -142,7 +145,7 @@ const api = {
 
   // Unified records (expenses + incomes combined)
   getRecords: (filters?: {
-    type?: 'expense' | 'income';
+    type?: Mode;
     category_l1?: string;
     startDate?: string;
     endDate?: string;
@@ -150,7 +153,7 @@ const api = {
     ipcRenderer.invoke('record:getAll', filters),
 
   // Daily totals within a month
-  getDailyTotals: (params: { type: 'expense' | 'income'; year: number; month: number }): Promise<DailyTotal[]> =>
+  getDailyTotals: (params: { type: Mode; year: number; month: number }): Promise<DailyTotal[]> =>
     ipcRenderer.invoke('record:getDailyTotals', params),
 
   addCategory: (input: CustomCategoryInput): Promise<{

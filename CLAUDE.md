@@ -195,6 +195,9 @@
 | 2026-08-05 | 图表库 | @ant-design/charts | 与 Ant Design 5 深度集成，基于 G2 |
 | 2026-08-15 | 测试框架 | Vitest + @testing-library/react + jsdom + @vitest/coverage-v8 | 与 electron-vite 同源，复用 Vite 配置，组件测试与覆盖率开箱即用 |
 | 2026-08-15 | 代码审查 | ESLint 9 + eslint-config-ali + inline header 规则 | 阿里巴巴前端规约官方配置，强制文件头作者名 Harriol（eslint-plugin-header 与 ESLint 9 不兼容，改用官方 inline 规则） |
+| 2026-08-16 | 构建工具版本 | vite 升级至 7.x（package.json overrides 强制统一） | vitest 4 需 vite ≥6，plugin-react 4 不支持 vite 8，三方在 vite 7 对齐，修复测试收集阶段崩溃 |
+| 2026-08-16 | 安全审查 | eslint-plugin-security + AI 人工审查 | 插件自动化检测危险模式（eval/不安全正则/child_process 等），AI 人工补查 SQL 注入、密钥泄露、配置明文等工具盲区 |
+| 2026-08-16 | 测试执行模式 | Vitest 串行执行（fileParallelism: false） | vitest 4 在 Windows + Node 22 下并行执行多文件时 worker 崩溃，串行更稳定且本套件规模小、耗时更短 |
 
 ---
 
@@ -203,12 +206,13 @@
 - **运行时**: Electron (最新稳定版)
 - **前端**: React 18+ TypeScript
 - **数据库**: better-sqlite3（本地 SQLite）
-- **构建工具**: electron-vite
+- **构建工具**: electron-vite（Vite 7，通过 overrides 统一版本）
 - **UI 库**: Ant Design 5
 - **状态管理**: Zustand
 - **打包**: electron-builder（electron-vite 内置）
 - **测试**: Vitest + @testing-library/react（单元测试与组件测试，jsdom 环境）
 - **代码审查**: ESLint 9 + eslint-config-ali（阿里巴巴前端规约）+ inline header 规则（文件头作者名）
+- **安全审查**: eslint-plugin-security（自动化安全基线）+ AI 人工审查（SQL 注入/密钥/配置明文）
 
 ---
 
