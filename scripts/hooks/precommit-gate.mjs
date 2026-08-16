@@ -30,7 +30,13 @@ process.stdin.on('end', () => {
 
   const gate = runGate();
   if (!gate.ok) {
-    process.stdout.write(JSON.stringify({ continue: false, stopReason: gate.reason }));
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: gate.reason,
+      },
+    }));
   }
   process.exit(0);
 });
